@@ -1,0 +1,97 @@
+import { useState, useMemo } from 'react'
+import { supabase } from '../supabaseClient'
+import ConfirmDialog from '../components/ConfirmDialog'
+
+function fmt(n) { return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+function fmtDate(d) { if (!d) return '—'; const [y, m, da] = d.split('-'); return `${da}/${m}/${y}` }
+
+function Badge({ status }) {
+  const map = { 'Concluído': 'badge-success', 'Pendente': 'badge-warning', 'Cancelado': 'badge-danger' }
+  return <span className={'badge ' + (map[status] || '')}>{status}</span>
+}
+
+export default function Vendas({ vendas, vendedores, onNovaVenda, onEditVenda, onDeleted, notify }) {
+  const [search, setSearch] = useState('')
+  const [statusF, setStatusF] = useState('')
+  const [vendF, setVendF] = useState('')
+  const [confirmId, setConfirmId] = useState(null)
+
+  const filtered = useMemo(() => {
+    return vendas.filter(v => {
+      if (statusF && v.status !== statusF) return false
+      if (vendF && v.vendedor !== vendF) return false
+      if (search && !((v.cliente + v.placa + v.servico + v.vendedor + v.os_num) + '').toLowerCase().includes(search.toLowerCase())) return false
+      return true
+    })
+  }, [vendas, search, statusF, vendF])
+
+  const handleDelete = async (id) => {
+    const { error } = await supabase.from('vendas').delete().eq('id', id)
+    if (error) notify('Erro ao excluir: ' + error.message, 'error')
+    else { notify('Venda excluída.', 'warning'); onDeleted() }
+    setConfirmId(null)
+  }
+
+  return (
+    <div>
+      <div className="table-header" style={{ background: 'transparent', border: 'none', padding: 0, marginBottom: '1rem' }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input placeholder="Buscar..." value={search} onChange={e => setSearch(e.target.value)} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #cbd5e1', width: 160 }} />
+          <select value={statusF} onChange={e => setStatusF(e.target.value)} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #cbd5e1' }}>
+            <option value="">Todos status</option>
+            <option>Pendente</option><option>Concluído</option><option>Cancelado</option>
+          </select>
+          <select value={vendF} onChange={e => setVendF(e.target.value)} style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #cbd5e1' }}>
+            <option value="">Todos vendedores</option>
+            {vendedores.map(v => <option key={v.id}>{v.nome}</option>)}
+          </select>
+        </div>
+        <button className="btn btn-primary" onClick={onNovaVenda}><i className="fas fa-plus"></i> Nova Venda</button>
+      </div>
+
+      <div className="table-container">
+        <div style={{ overflowX: 'auto' }}>
+          <table>
+            <thead>
+              <tr>
+                <th>OS Nº</th><th>Data</th><th>Cliente Final</th><th>Placa</th><th>Serviço</th>
+                <th>Valor</th><th>Vendedor</th><th>Pagamento</th><th>Status</th><th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.length === 0 ? (
+                <tr><td colSpan={10} style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Nenhuma venda encontrada.</td></tr>
+              ) : filtered.map(v => (
+                <tr key={v.id}>
+                  <td><b style={{ color: '#2563eb' }}>#{String(v.os_num).padStart(4, '0')}</b></td>
+                  <td>{fmtDate(v.data)}</td>
+                  <td>{v.cliente}</td>
+                  <td>{v.placa || '—'}</td>
+                  <td>{v.servico}</td>
+                  <td><b>R$ {fmt(v.valor)}</b></td>
+                  <td>{v.vendedor}</td>
+                  <td>{v.pgto}</td>
+                  <td><Badge status={v.status} /></td>
+                  <td>
+                    <div style={{ display: 'flex', gap: 6 }}>
+                      <button className="btn btn-icon btn-sm" onClick={() => onEditVenda(v)}><i className="fas fa-edit"></i></button>
+                      <button className="btn btn-danger btn-icon btn-sm" onClick={() => setConfirmId(v.id)}><i className="fas fa-trash"></i></button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {confirmId && (
+        <ConfirmDialog
+          message="Excluir esta venda? Esta ação não pode ser desfeita."
+          onCancel={() => setConfirmId(null)}
+          onConfirm={() => handleDelete(confirmId)}
+        />
+      )}
+    </div>
+  )
+}
