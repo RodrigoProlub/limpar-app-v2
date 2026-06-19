@@ -45,7 +45,20 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--gray-10
 .nav-item.active { background:var(--accent); color:white; }
 .nav-section { padding:12px 1rem 4px; font-size:10px; text-transform:uppercase; letter-spacing:0.6px; color:rgba(255,255,255,0.4); font-weight:600; }
 .main { margin-left:230px; flex:1; padding:1.5rem; min-height:100vh; }
-@media (max-width: 768px) { .sidebar { display:none; } .main { margin-left:0; } }
+.mobile-topbar { display:none; }
+.desktop-title { display:block; }
+.sidebar-overlay { display:none; }
+
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(-100%); transition: transform 0.25s ease; box-shadow: 2px 0 12px rgba(0,0,0,0.2); }
+  .sidebar.sidebar-open { transform: translateX(0); }
+  .main { margin-left:0; padding:1rem; }
+  .mobile-topbar { display:flex; align-items:center; gap:12px; margin-bottom:1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--gray-200); }
+  .mobile-menu-btn { background:var(--primary); color:white; border:none; border-radius:8px; width:40px; height:40px; font-size:18px; display:flex; align-items:center; justify-content:center; flex-shrink:0; cursor:pointer; }
+  .mobile-topbar-title { font-size:17px; font-weight:700; }
+  .desktop-title { display:none; }
+  .sidebar-overlay { display:block; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:9; }
+}
 
 .stats-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(160px,1fr)); gap:1rem; margin-bottom:1.25rem; }
 .stat-card { background:white; border-radius:var(--radius-lg); padding:1.1rem; border:1px solid var(--gray-200); box-shadow:var(--shadow); }
@@ -82,3 +95,18 @@ td { padding:10px 12px; border-bottom:1px solid var(--gray-100); font-size:13px;
 .toast { background:white; border-radius:var(--radius); padding:10px 14px; border-left:4px solid var(--success); box-shadow:var(--shadow-md); font-size:13px; }
 .toast.error { border-color: var(--danger); }
 .toast.warning { border-color: var(--warning); }
+Concluído
+Copie e cole exatamente esse conteúdo CSS acima (de :root { até .toast.warning...}) no arquivo src/styles.css no GitHub. Importante: copie só o conteúdo dentro do bloco de código, não copie texto extra que apareça acima ou abaixo dele na nossa conversa (como aconteceu com o App.jsx).
+
+1781870666381_image.png
+09:04
+Mas tem uma diferença: 84 linhas (75 loc) aqui, enquanto o original deveria ter mais linhas (por causa do bloco @media que adicionamos). Isso pode significar que essa atualização é antiga (o histórico mostra "Rename styles.css to src/styles.css", não "Update styles.css").
+
+Eu não atualizei ainda, eh, te mostrei pra ver se é aqui mesmo, aqui que eu colo, correto?
+
+09:04
+Sim, é exatamente aqui! Esse é o lugar certo. Pode clicar no ícone de lápis (editar), selecionar tudo (Ctrl+A), apagar, e colar o conteúdo CSS que te dei na mensagem anterior. Depois salve.
+
+
+
+Conseguiu colar e salvar?
