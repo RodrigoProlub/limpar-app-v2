@@ -132,5 +132,3 @@ export default function App() {
     </div>
   )
 }
-Concluído
-Copie e cole exatamente este conteúdo acima (de import { useState... até o } final) na tela do App.jsx que você tem aberta agora, substituindo o CSS que 
