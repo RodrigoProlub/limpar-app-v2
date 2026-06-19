@@ -1,8 +1,3 @@
-bash
-
-cat /home/claude/limpar-app/src/App.jsx
-Saída
-
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabaseClient'
 import Dashboard from './pages/Dashboard'
