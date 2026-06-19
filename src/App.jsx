@@ -1,3 +1,8 @@
+bash
+
+cat /home/claude/limpar-app/src/App.jsx
+Saída
+
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabaseClient'
 import Dashboard from './pages/Dashboard'
@@ -33,6 +38,7 @@ export default function App() {
   const [toasts, setToasts] = useState([])
   const [vendaModalOpen, setVendaModalOpen] = useState(false)
   const [editingVenda, setEditingVenda] = useState(null)
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
 
   const notify = useCallback((msg, type = 'success') => {
     const id = Date.now() + Math.random()
@@ -71,7 +77,8 @@ export default function App() {
   return (
     <div className="app-shell">
       <Toast toasts={toasts} />
-      <nav className="sidebar">
+      {mobileMenuOpen && <div className="sidebar-overlay" onClick={() => setMobileMenuOpen(false)}></div>}
+      <nav className={'sidebar' + (mobileMenuOpen ? ' sidebar-open' : '')}>
         <div className="sidebar-logo">
           <div className="sidebar-logo-icon"><i className="fas fa-broom" style={{ color: 'white' }}></i></div>
           <div>
@@ -81,14 +88,20 @@ export default function App() {
         </div>
         <div style={{ flex: 1, padding: '8px 0' }}>
           {NAV.map(n => (
-            <div key={n.id} className={'nav-item' + (panel === n.id ? ' active' : '')} onClick={() => setPanel(n.id)}>
+            <div key={n.id} className={'nav-item' + (panel === n.id ? ' active' : '')} onClick={() => { setPanel(n.id); setMobileMenuOpen(false) }}>
               <i className={'fas ' + n.icon}></i> {n.label}
             </div>
           ))}
         </div>
       </nav>
       <main className="main">
-        <h1 style={{ fontSize: 18, fontWeight: 700, marginBottom: '1rem' }}>{pageTitle}</h1>
+        <div className="mobile-topbar">
+          <button className="mobile-menu-btn" onClick={() => setMobileMenuOpen(true)} aria-label="Abrir menu">
+            <i className="fas fa-bars"></i>
+          </button>
+          <div className="mobile-topbar-title">{pageTitle}</div>
+        </div>
+        <h1 className="desktop-title" style={{ fontSize: 18, fontWeight: 700, marginBottom: '1rem' }}>{pageTitle}</h1>
 
         {panel === 'dashboard' && (
           <Dashboard
@@ -124,3 +137,5 @@ export default function App() {
     </div>
   )
 }
+Concluído
+Copie e cole exatamente este conteúdo acima (de import { useState... até o } final) na tela do App.jsx que você tem aberta agora, substituindo o CSS que 
