@@ -5,7 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 
 function fmt(n) { return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
-export default function Vendedores({ vendedores, onChanged, notify }) {
+export default function Vendedores({ vendedores, onChanged, notify, clienteId }) {
   const [modal, setModal] = useState(null) // { editing }
   const [confirmId, setConfirmId] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -13,7 +13,7 @@ export default function Vendedores({ vendedores, onChanged, notify }) {
   const handleSave = async (form) => {
     if (!form.nome) { notify('Nome é obrigatório.', 'error'); return }
     setSaving(true)
-    const payload = { nome: form.nome, tel: form.tel || '', cargo: form.cargo || '', meta: Number(form.meta) || 0, status: form.status || 'Ativo' }
+    const payload = { nome: form.nome, tel: form.tel || '', cargo: form.cargo || '', meta: Number(form.meta) || 0, status: form.status || 'Ativo', cliente_id: clienteId }
     let error
     if (modal.editing) {
       ({ error } = await supabase.from('vendedores').update(payload).eq('id', modal.editing.id))
