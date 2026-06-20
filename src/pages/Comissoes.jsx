@@ -5,7 +5,7 @@ import ConfirmDialog from '../components/ConfirmDialog'
 
 function fmt(n) { return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
-export default function Comissoes({ comissoes, vendedores, onChanged, notify }) {
+export default function Comissoes({ comissoes, vendedores, onChanged, notify, clienteId }) {
   const [modal, setModal] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -13,13 +13,13 @@ export default function Comissoes({ comissoes, vendedores, onChanged, notify }) 
   const handleSave = async (form) => {
     if (!form.vendedor || !form.valor) { notify('Preencha todos os campos.', 'error'); return }
     setSaving(true)
-    const payload = { vendedor: form.vendedor, valor: Number(form.valor) }
+    const payload = { vendedor: form.vendedor, valor: Number(form.valor), cliente_id: clienteId }
     let error
     if (modal.editing) {
       ({ error } = await supabase.from('comissoes').update(payload).eq('id', modal.editing.id))
     } else {
       // remove existing commission for this vendedor first, then insert
-      await supabase.from('comissoes').delete().eq('vendedor', form.vendedor)
+      await supabase.from('comissoes').delete().eq('vendedor', form.vendedor).eq('cliente_id', clienteId)
       ;({ error } = await supabase.from('comissoes').insert(payload))
     }
     setSaving(false)
