@@ -1,6 +1,6 @@
 :root {
-  --primary: #1a2744;
-  --accent: #2563eb;
+  --primary: #0f1f33;
+  --accent: #29abe2;
   --accent-hover: #1d4ed8;
   --accent-light: #eff6ff;
   --success: #16a34a;
@@ -38,8 +38,8 @@ body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--gray-10
 
 .app-shell { display:flex; min-height:100vh; }
 .sidebar { width:230px; background: var(--primary); color:white; display:flex; flex-direction:column; position:fixed; top:0; left:0; height:100vh; overflow-y:auto; z-index:10; }
-.sidebar-logo { padding:1.25rem 1rem; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(255,255,255,0.1); }
-.sidebar-logo-icon { width:36px; height:36px; background:var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center; }
+.sidebar-logo { padding:1rem; display:flex; align-items:center; gap:10px; border-bottom:1px solid rgba(255,255,255,0.1); }
+.sidebar-logo-icon { width:48px; height:48px; background:var(--accent); border-radius:8px; display:flex; align-items:center; justify-content:center; flex-shrink:0; overflow:hidden; }
 .nav-item { display:flex; align-items:center; gap:10px; padding:9px 1rem; margin:1px 8px; border-radius:6px; cursor:pointer; font-size:13px; color:rgba(255,255,255,0.75); }
 .nav-item:hover { background:rgba(255,255,255,0.1); color:white; }
 .nav-item.active { background:var(--accent); color:white; }
@@ -95,18 +95,3 @@ td { padding:10px 12px; border-bottom:1px solid var(--gray-100); font-size:13px;
 .toast { background:white; border-radius:var(--radius); padding:10px 14px; border-left:4px solid var(--success); box-shadow:var(--shadow-md); font-size:13px; }
 .toast.error { border-color: var(--danger); }
 .toast.warning { border-color: var(--warning); }
-Concluído
-Copie e cole exatamente esse conteúdo CSS acima (de :root { até .toast.warning...}) no arquivo src/styles.css no GitHub. Importante: copie só o conteúdo dentro do bloco de código, não copie texto extra que apareça acima ou abaixo dele na nossa conversa (como aconteceu com o App.jsx).
-
-1781870666381_image.png
-09:04
-Mas tem uma diferença: 84 linhas (75 loc) aqui, enquanto o original deveria ter mais linhas (por causa do bloco @media que adicionamos). Isso pode significar que essa atualização é antiga (o histórico mostra "Rename styles.css to src/styles.css", não "Update styles.css").
-
-Eu não atualizei ainda, eh, te mostrei pra ver se é aqui mesmo, aqui que eu colo, correto?
-
-09:04
-Sim, é exatamente aqui! Esse é o lugar certo. Pode clicar no ícone de lápis (editar), selecionar tudo (Ctrl+A), apagar, e colar o conteúdo CSS que te dei na mensagem anterior. Depois salve.
-
-
-
-Conseguiu colar e salvar?
