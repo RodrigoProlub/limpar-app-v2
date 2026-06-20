@@ -5,7 +5,7 @@ function todayStr() {
   return new Date().toISOString().slice(0, 10)
 }
 
-export default function VendaModal({ vendedores, servicos, veiculos, editing, onClose, onSaved, notify }) {
+export default function VendaModal({ vendedores, servicos, veiculos, editing, onClose, onSaved, notify, clienteId }) {
   const v = editing || {}
   const [form, setForm] = useState({
     data: v.data || todayStr(),
@@ -51,13 +51,13 @@ export default function VendaModal({ vendedores, servicos, veiculos, editing, on
         if (error) throw error
         notify('Venda atualizada!')
       } else {
-        // get next OS number
-        const { data: maxRows } = await supabase.from('vendas').select('os_num').order('os_num', { ascending: false }).limit(1)
+        // get next OS number (scoped to this cliente)
+        const { data: maxRows } = await supabase.from('vendas').select('os_num').eq('cliente_id', clienteId).order('os_num', { ascending: false }).limit(1)
         const nextOs = maxRows && maxRows.length > 0 ? maxRows[0].os_num + 1 : 1
         const { error } = await supabase.from('vendas').insert({
           os_num: nextOs, data: form.data, cliente: form.cliente.trim(), placa: form.placa, modelo: form.modelo,
           servico: form.servico, valor: Number(form.valor), vendedor: form.vendedor,
-          pgto: form.pgto, status: form.status, obs: form.obs,
+          pgto: form.pgto, status: form.status, obs: form.obs, cliente_id: clienteId,
         })
         if (error) throw error
         notify('Venda registrada! OS #' + String(nextOs).padStart(4, '0'))
