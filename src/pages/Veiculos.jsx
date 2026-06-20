@@ -3,7 +3,7 @@ import { supabase } from '../supabaseClient'
 import SimpleModal from '../components/SimpleModal'
 import ConfirmDialog from '../components/ConfirmDialog'
 
-export default function Veiculos({ veiculos, onChanged, notify }) {
+export default function Veiculos({ veiculos, onChanged, notify, clienteId }) {
   const [modal, setModal] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
   const [saving, setSaving] = useState(false)
@@ -11,7 +11,7 @@ export default function Veiculos({ veiculos, onChanged, notify }) {
   const handleSave = async (form) => {
     if (!form.placa || !form.modelo) { notify('Placa e modelo são obrigatórios.', 'error'); return }
     setSaving(true)
-    const payload = { placa: form.placa.toUpperCase(), modelo: form.modelo }
+    const payload = { placa: form.placa.toUpperCase(), modelo: form.modelo, cliente_id: clienteId }
     let error
     if (modal.editing) {
       ({ error } = await supabase.from('veiculos').update(payload).eq('id', modal.editing.id))
