@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabaseClient'
+import { useCliente } from './ClienteContext'
+import SeletorCliente from './pages/SeletorCliente'
 import Dashboard from './pages/Dashboard'
 import Vendas from './pages/Vendas'
 import Vendedores from './pages/Vendedores'
@@ -23,6 +25,7 @@ const NAV = [
 ]
 
 export default function App() {
+  const { cliente, loading: clienteLoading, sairDoCliente } = useCliente()
   const [panel, setPanel] = useState('dashboard')
   const [vendas, setVendas] = useState([])
   const [vendedores, setVendedores] = useState([])
@@ -42,12 +45,14 @@ export default function App() {
   }, [])
 
   const loadAll = useCallback(async () => {
+    if (!cliente) return
+    const cid = cliente.id
     const [v, vd, s, vc, c] = await Promise.all([
-      supabase.from('vendas').select('*').order('os_num', { ascending: false }),
-      supabase.from('vendedores').select('*').order('nome'),
-      supabase.from('servicos').select('*').order('cod'),
-      supabase.from('veiculos').select('*').order('placa'),
-      supabase.from('comissoes').select('*'),
+      supabase.from('vendas').select('*').eq('cliente_id', cid).order('os_num', { ascending: false }),
+      supabase.from('vendedores').select('*').eq('cliente_id', cid).order('nome'),
+      supabase.from('servicos').select('*').eq('cliente_id', cid).order('cod'),
+      supabase.from('veiculos').select('*').eq('cliente_id', cid).order('placa'),
+      supabase.from('comissoes').select('*').eq('cliente_id', cid),
     ])
     if (v.data) setVendas(v.data)
     if (vd.data) setVendedores(vd.data)
@@ -55,16 +60,26 @@ export default function App() {
     if (vc.data) setVeiculos(vc.data)
     if (c.data) setComissoes(c.data)
     setLoading(false)
-  }, [])
+  }, [cliente])
 
   useEffect(() => {
+    if (!cliente) return
+    setLoading(true)
     loadAll()
-    const interval = setInterval(loadAll, 10000) // auto-refresh every 10s
+    const interval = setInterval(loadAll, 10000)
     return () => clearInterval(interval)
-  }, [loadAll])
+  }, [cliente, loadAll])
+
+  if (clienteLoading) {
+    return <div style={{ padding: '3rem', textAlign: 'center' }}>Carregando...</div>
+  }
+
+  if (!cliente) {
+    return <SeletorCliente />
+  }
 
   if (loading) {
-    return <div style={{ padding: '3rem', textAlign: 'center' }}>Carregando dados...</div>
+    return <div style={{ padding: '3rem', textAlign: 'center' }}>Carregando dados de {cliente.nome}...</div>
   }
 
   const pageTitle = NAV.find(n => n.id === panel)?.label || ''
@@ -75,10 +90,12 @@ export default function App() {
       {mobileMenuOpen && <div className="sidebar-overlay" onClick={() => setMobileMenuOpen(false)}></div>}
       <nav className={'sidebar' + (mobileMenuOpen ? ' sidebar-open' : '')}>
         <div className="sidebar-logo">
-          <div className="sidebar-logo-icon"><i className="fas fa-broom" style={{ color: 'white' }}></i></div>
+          <div className="sidebar-logo-icon" style={{ background: 'white', padding: 4 }}>
+            <img src="/logo.jpeg" alt="LimpAr Auto" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          </div>
           <div>
-            <div style={{ fontSize: 15, fontWeight: 700 }}>LimpAr</div>
-            <div style={{ fontSize: 11, color: '#93c5fd' }}>Gestão Comercial</div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>LimpAr Auto</div>
+            <div style={{ fontSize: 11, color: '#93c5fd' }}>{cliente.nome}</div>
           </div>
         </div>
         <div style={{ flex: 1, padding: '8px 0' }}>
@@ -87,6 +104,9 @@ export default function App() {
               <i className={'fas ' + n.icon}></i> {n.label}
             </div>
           ))}
+        </div>
+        <div className="nav-item" style={{ borderTop: '1px solid rgba(255,255,255,0.1)', margin: '8px' }} onClick={sairDoCliente}>
+          <i className="fas fa-right-from-bracket"></i> Trocar cliente
         </div>
       </nav>
       <main className="main">
@@ -112,10 +132,10 @@ export default function App() {
             onDeleted={loadAll} notify={notify}
           />
         )}
-        {panel === 'vendedores' && <Vendedores vendedores={vendedores} onChanged={loadAll} notify={notify} />}
-        {panel === 'servicos' && <Servicos servicos={servicos} onChanged={loadAll} notify={notify} />}
-        {panel === 'veiculos' && <Veiculos veiculos={veiculos} onChanged={loadAll} notify={notify} />}
-        {panel === 'comissoes' && <Comissoes comissoes={comissoes} vendedores={vendedores} onChanged={loadAll} notify={notify} />}
+        {panel === 'vendedores' && <Vendedores vendedores={vendedores} onChanged={loadAll} notify={notify} clienteId={cliente.id} />}
+        {panel === 'servicos' && <Servicos servicos={servicos} onChanged={loadAll} notify={notify} clienteId={cliente.id} />}
+        {panel === 'veiculos' && <Veiculos veiculos={veiculos} onChanged={loadAll} notify={notify} clienteId={cliente.id} />}
+        {panel === 'comissoes' && <Comissoes comissoes={comissoes} vendedores={vendedores} onChanged={loadAll} notify={notify} clienteId={cliente.id} />}
         {panel === 'ranking' && <Ranking vendas={vendas} vendedores={vendedores} />}
         {panel === 'relatorios' && <Relatorios vendas={vendas} vendedores={vendedores} servicos={servicos} notify={notify} />}
       </main>
@@ -127,6 +147,7 @@ export default function App() {
           onClose={() => setVendaModalOpen(false)}
           onSaved={() => { setVendaModalOpen(false); loadAll() }}
           notify={notify}
+          clienteId={cliente.id}
         />
       )}
     </div>
