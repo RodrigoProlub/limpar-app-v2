@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { supabase } from './supabaseClient'
 import { useCliente } from './ClienteContext'
 import SeletorCliente from './pages/SeletorCliente'
+import AdminDashboard from './pages/AdminDashboard'
 import Dashboard from './pages/Dashboard'
 import Vendas from './pages/Vendas'
 import Vendedores from './pages/Vendedores'
@@ -69,6 +70,11 @@ export default function App() {
     const interval = setInterval(loadAll, 10000)
     return () => clearInterval(interval)
   }, [cliente, loadAll])
+
+  const path = window.location.pathname.replace('/', '').trim()
+  if (path === 'admin') {
+    return <AdminDashboard />
+  }
 
   if (clienteLoading) {
     return <div style={{ padding: '3rem', textAlign: 'center' }}>Carregando...</div>
