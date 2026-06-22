@@ -1,11 +1,13 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { supabase } from '../supabaseClient'
 
 function todayStr() {
   return new Date().toISOString().slice(0, 10)
 }
 
-export default function VendaModal({ vendedores, servicos, veiculos, editing, onClose, onSaved, notify, clienteId }) {
+function fmt(n) { return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+
+export default function VendaModal({ vendedores, servicos, veiculos, vendas, comissoes, editing, onClose, onSaved, notify, clienteId }) {
   const v = editing || {}
   const [form, setForm] = useState({
     data: v.data || todayStr(),
@@ -20,6 +22,14 @@ export default function VendaModal({ vendedores, servicos, veiculos, editing, on
     obs: v.obs || '',
   })
   const [saving, setSaving] = useState(false)
+
+  const comissaoInfo = useMemo(() => {
+    if (!form.vendedor || !vendas || !comissoes) return null
+    const mes = todayStr().slice(0, 7)
+    const comissaoFixa = (comissoes.find(c => c.vendedor === form.vendedor) || {}).valor || 0
+    const qtd = vendas.filter(x => x.vendedor === form.vendedor && x.data.startsWith(mes) && x.status === 'Concluído').length
+    return { qtd, comissaoFixa, total: qtd * comissaoFixa }
+  }, [form.vendedor, vendas, comissoes])
 
   const set = (k, val) => setForm(f => ({ ...f, [k]: val }))
 
@@ -49,7 +59,7 @@ export default function VendaModal({ vendedores, servicos, veiculos, editing, on
           pgto: form.pgto, status: form.status, obs: form.obs,
         }).eq('id', editing.id)
         if (error) throw error
-        notify('Venda atualizada!')
+        notify('TMO/Venda atualizada!')
       } else {
         // get next OS number (scoped to this cliente)
         const { data: maxRows } = await supabase.from('vendas').select('os_num').eq('cliente_id', clienteId).order('os_num', { ascending: false }).limit(1)
@@ -60,7 +70,7 @@ export default function VendaModal({ vendedores, servicos, veiculos, editing, on
           pgto: form.pgto, status: form.status, obs: form.obs, cliente_id: clienteId,
         })
         if (error) throw error
-        notify('Venda registrada! OS #' + String(nextOs).padStart(4, '0'))
+        notify('TMO/Venda registrada! OS #' + String(nextOs).padStart(4, '0'))
       }
       onSaved()
     } catch (err) {
@@ -73,10 +83,26 @@ export default function VendaModal({ vendedores, servicos, veiculos, editing, on
     <div className="modal-overlay">
       <div className="modal">
         <div className="modal-header">
-          <div style={{ fontSize: 16, fontWeight: 700 }}>{editing ? 'Editar Venda' : 'Nova Venda / OS'}</div>
+          <div style={{ fontSize: 16, fontWeight: 700 }}>{editing ? 'Editar TMO/Venda' : 'Nova TMO/Venda / OS'}</div>
           <button className="btn btn-icon" onClick={onClose}><i className="fas fa-times"></i></button>
         </div>
         <div className="modal-body">
+          {comissaoInfo && (
+            <div style={{
+              background: '#fee2e2', border: '2px solid #dc2626', borderRadius: 10,
+              padding: '12px 16px', marginBottom: 16, textAlign: 'center'
+            }}>
+              <div style={{ fontSize: 11, color: '#dc2626', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Comissão acumulada no mês — {form.vendedor}
+              </div>
+              <div style={{ fontSize: 30, fontWeight: 800, color: '#dc2626', lineHeight: 1.3 }}>
+                R$ {fmt(comissaoInfo.total)}
+              </div>
+              <div style={{ fontSize: 12, color: '#dc2626' }}>
+                {comissaoInfo.qtd} TMO/venda(s) concluída(s) × R$ {fmt(comissaoInfo.comissaoFixa)}
+              </div>
+            </div>
+          )}
           <div className="form-row">
             <div className="form-group">
               <label>Data</label>
@@ -143,7 +169,7 @@ export default function VendaModal({ vendedores, servicos, veiculos, editing, on
         <div className="modal-footer">
           <button className="btn" onClick={onClose}>Cancelar</button>
           <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-            <i className="fas fa-save"></i> {saving ? 'Salvando...' : 'Salvar Venda'}
+            <i className="fas fa-save"></i> {saving ? 'Salvando...' : 'Salvar TMO/Venda'}
           </button>
         </div>
       </div>
