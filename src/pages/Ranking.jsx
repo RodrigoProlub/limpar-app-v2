@@ -44,7 +44,7 @@ export default function Ranking({ vendas, vendedores }) {
                 <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontWeight: 600, fontSize: 13 }}>{v.nome}</div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>{v.qtdMes} vendas | R$ {fmt(v.fatMes)} no mês</div>
+                  <div style={{ fontSize: 11, color: '#64748b' }}>{v.qtdMes} TMO/vendas | R$ {fmt(v.fatMes)} no mês</div>
                 </div>
                 <div style={{ fontWeight: 700 }}>R$ {fmt(v.fat)}</div>
               </div>
@@ -58,7 +58,7 @@ export default function Ranking({ vendas, vendedores }) {
       <div className="table-container">
         <div style={{ overflowX: 'auto' }}>
           <table>
-            <thead><tr><th>Posição</th><th>Vendedor</th><th>Qtd. Vendas</th><th>Faturamento</th><th>Ticket Médio</th><th>Meta</th><th>% Meta</th></tr></thead>
+            <thead><tr><th>Posição</th><th>Vendedor</th><th>Qtd. TMO/Venda</th><th>Faturamento</th><th>Ticket Médio</th><th>Meta</th><th>% Meta</th></tr></thead>
             <tbody>
               {ranking.map((v, i) => (
                 <tr key={v.id}>
