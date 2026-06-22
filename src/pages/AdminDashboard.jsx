@@ -91,7 +91,7 @@ export default function AdminDashboard() {
           <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent)' }}>R$ {fmt(totalGeral)}</div>
         </div>
         <div className="card" style={{ flex: 1, minWidth: 200 }}>
-          <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>Total de Vendas</div>
+          <div style={{ fontSize: 12, color: 'var(--gray-500)' }}>Total de TMO/Venda</div>
           <div style={{ fontSize: 24, fontWeight: 700 }}>{totalVendas}</div>
         </div>
         <div className="card" style={{ flex: 1, minWidth: 200 }}>
@@ -103,7 +103,7 @@ export default function AdminDashboard() {
       <div className="table-container">
         <div style={{ overflowX: 'auto' }}>
           <table>
-            <thead><tr><th>#</th><th>Cliente</th><th>Vendas</th><th>Faturamento</th></tr></thead>
+            <thead><tr><th>#</th><th>Cliente</th><th>TMO/Venda</th><th>Faturamento</th></tr></thead>
             <tbody>
               {linhas.length === 0 ? (
                 <tr><td colSpan={4} style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Nenhum cliente cadastrado ainda.</td></tr>
