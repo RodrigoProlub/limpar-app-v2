@@ -37,7 +37,6 @@ export default function SeletorCliente() {
           <img src="/logo.jpeg" alt="LimpAr Auto" style={{ maxWidth: 200, marginBottom: 12 }} />
           <div style={{ fontSize: 13, color: 'var(--gray-500)' }}>Selecione o cliente para continuar</div>
         </div>
-
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: '1.5rem', maxHeight: 280, overflowY: 'auto' }}>
           {clientes.length === 0 && (
             <p style={{ color: 'var(--gray-400)', textAlign: 'center', fontSize: 13 }}>Nenhum cliente cadastrado ainda.</p>
@@ -53,7 +52,6 @@ export default function SeletorCliente() {
             </button>
           ))}
         </div>
-
         <div style={{ borderTop: '1px solid var(--gray-200)', paddingTop: '1rem' }}>
           <div style={{ fontSize: 12, color: 'var(--gray-500)', marginBottom: 8, fontWeight: 600, textTransform: 'uppercase' }}>Novo cliente</div>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -69,6 +67,14 @@ export default function SeletorCliente() {
             </button>
           </div>
           {erro && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 6 }}>{erro}</div>}
+        </div>
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <a
+            href="/admin"
+            style={{ fontSize: 12, color: 'var(--gray-400)', textDecoration: 'none' }}
+          >
+            <i className="fas fa-chart-line"></i> Dashboard Geral
+          </a>
         </div>
       </div>
     </div>
