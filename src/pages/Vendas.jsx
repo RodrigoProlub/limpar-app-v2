@@ -28,7 +28,7 @@ export default function Vendas({ vendas, vendedores, onNovaVenda, onEditVenda, o
   const handleDelete = async (id) => {
     const { error } = await supabase.from('vendas').delete().eq('id', id)
     if (error) notify('Erro ao excluir: ' + error.message, 'error')
-    else { notify('Venda excluída.', 'warning'); onDeleted() }
+    else { notify('TMO/Venda excluída.', 'warning'); onDeleted() }
     setConfirmId(null)
   }
 
@@ -46,7 +46,7 @@ export default function Vendas({ vendas, vendedores, onNovaVenda, onEditVenda, o
             {vendedores.map(v => <option key={v.id}>{v.nome}</option>)}
           </select>
         </div>
-        <button className="btn btn-primary" onClick={onNovaVenda}><i className="fas fa-plus"></i> Nova Venda</button>
+        <button className="btn btn-primary" onClick={onNovaVenda}><i className="fas fa-plus"></i> Nova TMO/Venda</button>
       </div>
 
       <div className="table-container">
@@ -60,7 +60,7 @@ export default function Vendas({ vendas, vendedores, onNovaVenda, onEditVenda, o
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Nenhuma venda encontrada.</td></tr>
+                <tr><td colSpan={10} style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Nenhuma TMO/Venda encontrada.</td></tr>
               ) : filtered.map(v => (
                 <tr key={v.id}>
                   <td><b style={{ color: '#2563eb' }}>#{String(v.os_num).padStart(4, '0')}</b></td>
@@ -87,7 +87,7 @@ export default function Vendas({ vendas, vendedores, onNovaVenda, onEditVenda, o
 
       {confirmId && (
         <ConfirmDialog
-          message="Excluir esta venda? Esta ação não pode ser desfeita."
+          message="Excluir este TMO/Venda? Esta ação não pode ser desfeita."
           onCancel={() => setConfirmId(null)}
           onConfirm={() => handleDelete(confirmId)}
         />
