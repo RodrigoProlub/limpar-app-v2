@@ -88,12 +88,12 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
   return (
     <div>
       <button className="btn-nova-venda" onClick={onNovaVenda}>
-        <i className="fas fa-plus-circle" style={{ fontSize: 20 }}></i> Registrar Nova Venda
+        <i className="fas fa-plus-circle" style={{ fontSize: 20 }}></i> Registrar Nova TMO/Venda
       </button>
 
-      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, fontWeight: 600 }}>VENDAS</div>
+      <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, fontWeight: 600 }}>TMO/VENDAS</div>
       <div className="stats-grid">
-        {statCard('Total de Vendas', dash.total, 'Registradas')}
+        {statCard('Total de TMO/Venda', dash.total, 'Registradas')}
         {statCard('Concluídas', dash.concluidas, 'Finalizadas', '#16a34a')}
         {statCard('Pendentes', dash.pendentes, 'Aguardando', '#d97706')}
         {statCard('Canceladas', dash.canceladas, 'Canceladas', '#dc2626')}
@@ -133,7 +133,7 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
             <div key={c.nome} style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
               <div>
                 <div style={{ fontWeight: 600, fontSize: 13 }}>{c.nome}</div>
-                <div style={{ fontSize: 11, color: '#64748b' }}>{c.qtd} venda(s) concluída(s) × R$ {fmt(c.valorFixo)}</div>
+                <div style={{ fontSize: 11, color: '#64748b' }}>{c.qtd} TMO/venda(s) concluída(s) × R$ {fmt(c.valorFixo)}</div>
               </div>
               <div style={{ textAlign: 'right' }}>
                 <div style={{ fontWeight: 700, color: '#16a34a' }}>R$ {fmt(c.total)}</div>
