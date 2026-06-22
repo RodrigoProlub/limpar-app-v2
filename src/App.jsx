@@ -16,7 +16,7 @@ import Toast from './components/Toast'
 
 const NAV = [
   { id: 'dashboard', label: 'Dashboard', icon: 'fa-chart-pie' },
-  { id: 'vendas', label: 'Controle de Vendas', icon: 'fa-file-invoice-dollar' },
+  { id: 'vendas', label: 'Controle de TMO/Venda', icon: 'fa-file-invoice-dollar' },
   { id: 'vendedores', label: 'Vendedores', icon: 'fa-users' },
   { id: 'servicos', label: 'Serviços', icon: 'fa-tools' },
   { id: 'veiculos', label: 'Veículos', icon: 'fa-car' },
@@ -149,6 +149,7 @@ export default function App() {
       {vendaModalOpen && (
         <VendaModal
           vendedores={vendedores} servicos={servicos} veiculos={veiculos}
+          vendas={vendas} comissoes={comissoes}
           editing={editingVenda}
           onClose={() => setVendaModalOpen(false)}
           onSaved={() => { setVendaModalOpen(false); loadAll() }}
