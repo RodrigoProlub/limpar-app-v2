@@ -7,7 +7,7 @@ function todayStr() {
 
 function fmt(n) { return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
 
-export default function VendaModal({ vendedores, servicos, veiculos, vendas, comissoes, editing, onClose, onSaved, notify, clienteId }) {
+export default function VendaModal({ vendedores, servicos, vendas, comissoes, editing, onClose, onSaved, notify, clienteId }) {
   const v = editing || {}
   const [form, setForm] = useState({
     data: v.data || todayStr(),
@@ -35,8 +35,6 @@ export default function VendaModal({ vendedores, servicos, veiculos, vendas, com
 
   const onPlacaChange = (val) => {
     set('placa', val.toUpperCase())
-    const veic = veiculos.find(x => x.placa.toUpperCase() === val.toUpperCase())
-    if (veic) set('modelo', veic.modelo)
   }
 
   const onServicoChange = (nome) => {
