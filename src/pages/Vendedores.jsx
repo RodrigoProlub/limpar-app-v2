@@ -40,7 +40,7 @@ export default function Vendedores({ vendedores, onChanged, notify, clienteId })
       <div className="table-container">
         <div style={{ overflowX: 'auto' }}>
           <table>
-            <thead><tr><th>Nome</th><th>Telefone</th><th>Cargo</th><th>Meta Mensal</th><th>Status</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Nome</th><th>Telefone</th><th>Cargo</th><th>Meta Mensal (TMO)</th><th>Status</th><th>Ações</th></tr></thead>
             <tbody>
               {vendedores.length === 0 ? (
                 <tr><td colSpan={6} style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Nenhum vendedor cadastrado.</td></tr>
@@ -49,7 +49,7 @@ export default function Vendedores({ vendedores, onChanged, notify, clienteId })
                   <td><b>{v.nome}</b></td>
                   <td>{v.tel || '—'}</td>
                   <td>{v.cargo || '—'}</td>
-                  <td>R$ {fmt(v.meta)}</td>
+                  <td>{v.meta} TMO</td>
                   <td><span className={'badge ' + (v.status === 'Ativo' ? 'badge-success' : 'badge-danger')}>{v.status}</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -71,7 +71,7 @@ export default function Vendedores({ vendedores, onChanged, notify, clienteId })
             { key: 'nome', label: 'Nome' },
             { key: 'tel', label: 'Telefone' },
             { key: 'cargo', label: 'Cargo' },
-            { key: 'meta', label: 'Meta Mensal (R$)', type: 'number' },
+            { key: 'meta', label: 'Meta Mensal (qtd. TMO/Venda)', type: 'number' },
             { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] },
           ]}
           values={modal.editing || { status: 'Ativo' }}
