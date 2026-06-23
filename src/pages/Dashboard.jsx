@@ -104,6 +104,7 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
         {statCard('Faturamento Hoje', 'R$ ' + fmt(dash.fatDia))}
         {statCard('Faturamento do Mês', 'R$ ' + fmt(dash.fatMes))}
         {statCard('Faturamento do Ano', 'R$ ' + fmt(dash.fatAno))}
+        {statCard('Comissões do Mês (Total)', 'R$ ' + fmt(commissionList.reduce((s, c) => s + c.total, 0)), 'A pagar aos vendedores', '#dc2626')}
       </div>
 
       <div style={{ fontSize: 12, color: '#64748b', marginBottom: 10, fontWeight: 600 }}>INDICADORES</div>
