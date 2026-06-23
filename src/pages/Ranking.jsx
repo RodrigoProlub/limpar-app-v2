@@ -28,7 +28,7 @@ export default function Ranking({ vendas, vendedores }) {
       const fat = vs.reduce((s, x) => s + x.valor, 0)
       const fatMes = vsMes.reduce((s, x) => s + x.valor, 0)
       const ticket = vsMes.length ? fatMes / vsMes.length : 0
-      const metaPerc = v.meta ? Math.round((fatMes / v.meta) * 100) : 0
+      const metaPerc = v.meta ? Math.round((vsMes.length / v.meta) * 100) : 0
       return { ...v, qtd: vs.length, qtdMes: vsMes.length, fat, fatMes, ticket, metaPerc }
     }).sort((a, b) => b.fat - a.fat)
   }, [vendedores, vendas, mes])
@@ -40,13 +40,26 @@ export default function Ranking({ vendas, vendedores }) {
           <div style={{ fontWeight: 600, marginBottom: 10 }}>Ranking de Vendedores</div>
           {ranking.length === 0 ? <p style={{ color: '#94a3b8' }}>Nenhum vendedor cadastrado.</p> :
             ranking.map((v, i) => (
-              <div key={v.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderBottom: '1px solid #f1f5f9' }}>
-                <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{v.nome}</div>
-                  <div style={{ fontSize: 11, color: '#64748b' }}>{v.qtdMes} TMO/vendas | R$ {fmt(v.fatMes)} no mês</div>
+              <div key={v.id} style={{ padding: '9px 0', borderBottom: '1px solid #f1f5f9' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ width: 26, height: 26, borderRadius: '50%', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 12, fontWeight: 700, flexShrink: 0 }}>{i + 1}</div>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 600, fontSize: 13 }}>{v.nome}</div>
+                    <div style={{ fontSize: 11, color: '#64748b' }}>{v.qtdMes} TMO/vendas | R$ {fmt(v.fatMes)} no mês</div>
+                  </div>
+                  <div style={{ fontWeight: 700 }}>R$ {fmt(v.fat)}</div>
                 </div>
-                <div style={{ fontWeight: 700 }}>R$ {fmt(v.fat)}</div>
+                {v.meta > 0 && (
+                  <div style={{ marginTop: 6, marginLeft: 36 }}>
+                    <div style={{ height: 6, background: '#f1f5f9', borderRadius: 4, overflow: 'hidden' }}>
+                      <div style={{
+                        height: '100%', borderRadius: 4, width: Math.min(v.metaPerc, 100) + '%',
+                        background: v.metaPerc >= 100 ? '#16a34a' : v.metaPerc >= 50 ? '#d97706' : '#dc2626',
+                      }}></div>
+                    </div>
+                    <div style={{ fontSize: 10, color: '#94a3b8', marginTop: 2 }}>{v.qtdMes} / {v.meta} TMO ({v.metaPerc}%)</div>
+                  </div>
+                )}
               </div>
             ))}
         </div>
@@ -67,7 +80,7 @@ export default function Ranking({ vendas, vendedores }) {
                   <td>{v.qtd}</td>
                   <td>R$ {fmt(v.fat)}</td>
                   <td>R$ {fmt(v.ticket)}</td>
-                  <td>R$ {fmt(v.meta)}</td>
+                  <td>{v.meta} TMO</td>
                   <td>
                     <span className={'badge ' + (v.metaPerc >= 100 ? 'badge-success' : v.metaPerc >= 50 ? 'badge-warning' : 'badge-danger')}>{v.metaPerc}%</span>
                   </td>
