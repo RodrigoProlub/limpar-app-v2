@@ -7,7 +7,6 @@ import Dashboard from './pages/Dashboard'
 import Vendas from './pages/Vendas'
 import Vendedores from './pages/Vendedores'
 import Servicos from './pages/Servicos'
-import Veiculos from './pages/Veiculos'
 import Comissoes from './pages/Comissoes'
 import Ranking from './pages/Ranking'
 import Relatorios from './pages/Relatorios'
@@ -19,7 +18,6 @@ const NAV = [
   { id: 'vendas', label: 'Controle de TMO/Venda', icon: 'fa-file-invoice-dollar' },
   { id: 'vendedores', label: 'Vendedores', icon: 'fa-users' },
   { id: 'servicos', label: 'Serviços', icon: 'fa-tools' },
-  { id: 'veiculos', label: 'Veículos', icon: 'fa-car' },
   { id: 'comissoes', label: 'Comissões', icon: 'fa-money-bill-wave' },
   { id: 'ranking', label: 'Ranking Vendedores', icon: 'fa-trophy' },
   { id: 'relatorios', label: 'Relatórios', icon: 'fa-file-chart-column' },
@@ -31,8 +29,8 @@ export default function App() {
   const [vendas, setVendas] = useState([])
   const [vendedores, setVendedores] = useState([])
   const [servicos, setServicos] = useState([])
-  const [veiculos, setVeiculos] = useState([])
   const [comissoes, setComissoes] = useState([])
+  const [fechamentos, setFechamentos] = useState([])
   const [loading, setLoading] = useState(true)
   const [toasts, setToasts] = useState([])
   const [vendaModalOpen, setVendaModalOpen] = useState(false)
@@ -48,18 +46,18 @@ export default function App() {
   const loadAll = useCallback(async () => {
     if (!cliente) return
     const cid = cliente.id
-    const [v, vd, s, vc, c] = await Promise.all([
+    const [v, vd, s, c, f] = await Promise.all([
       supabase.from('vendas').select('*').eq('cliente_id', cid).order('os_num', { ascending: false }),
       supabase.from('vendedores').select('*').eq('cliente_id', cid).order('nome'),
       supabase.from('servicos').select('*').eq('cliente_id', cid).order('cod'),
-      supabase.from('veiculos').select('*').eq('cliente_id', cid).order('placa'),
       supabase.from('comissoes').select('*').eq('cliente_id', cid),
+      supabase.from('fechamentos_comissao').select('*').eq('cliente_id', cid).order('mes', { ascending: false }),
     ])
     if (v.data) setVendas(v.data)
     if (vd.data) setVendedores(vd.data)
     if (s.data) setServicos(s.data)
-    if (vc.data) setVeiculos(vc.data)
     if (c.data) setComissoes(c.data)
+    if (f.data) setFechamentos(f.data)
     setLoading(false)
   }, [cliente])
 
@@ -140,15 +138,19 @@ export default function App() {
         )}
         {panel === 'vendedores' && <Vendedores vendedores={vendedores} onChanged={loadAll} notify={notify} clienteId={cliente.id} />}
         {panel === 'servicos' && <Servicos servicos={servicos} onChanged={loadAll} notify={notify} clienteId={cliente.id} />}
-        {panel === 'veiculos' && <Veiculos veiculos={veiculos} onChanged={loadAll} notify={notify} clienteId={cliente.id} />}
-        {panel === 'comissoes' && <Comissoes comissoes={comissoes} vendedores={vendedores} onChanged={loadAll} notify={notify} clienteId={cliente.id} />}
+        {panel === 'comissoes' && (
+          <Comissoes
+            comissoes={comissoes} vendedores={vendedores} vendas={vendas} fechamentos={fechamentos}
+            onChanged={loadAll} notify={notify} clienteId={cliente.id}
+          />
+        )}
         {panel === 'ranking' && <Ranking vendas={vendas} vendedores={vendedores} />}
         {panel === 'relatorios' && <Relatorios vendas={vendas} vendedores={vendedores} servicos={servicos} notify={notify} />}
       </main>
 
       {vendaModalOpen && (
         <VendaModal
-          vendedores={vendedores} servicos={servicos} veiculos={veiculos}
+          vendedores={vendedores} servicos={servicos}
           vendas={vendas} comissoes={comissoes}
           editing={editingVenda}
           onClose={() => setVendaModalOpen(false)}
