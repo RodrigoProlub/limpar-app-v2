@@ -1,106 +1,153 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
-// ---- Configuracao ----
-const SENHA_ADMIN = 'limpar2026' // mesma senha do /admin - troque aqui se quiser uma diferente
+// =====================================================================
+// SISTEMA DE DESIGN — "Painel de Despacho"
+// Inspirado em mapas de roteiro/metrô: cada dia e uma linha, cada
+// cliente e uma parada. Paleta grafite + papel + ambar de sinalizacao.
+// =====================================================================
+
+const SENHA_ADMIN = 'limpar2026'
+
+const COR = {
+  ink: '#14181F',
+  inkSoft: '#1E2430',
+  paper: '#F6F4EF',
+  paperRaised: '#FFFFFF',
+  line: '#DEDACF',
+  lineSoft: '#EAE7DD',
+  amber: '#F2A93B',
+  amberDeep: '#C97F0F',
+  textPrimary: '#1B1F27',
+  textSecondary: '#6B6458',
+  textOnInk: '#F6F4EF',
+  textOnInkSoft: '#9CA3AF',
+}
+
 const DIAS = ['SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA']
-const DIA_COR = {
-  SEGUNDA: '#2F5496',
-  TERÇA: '#548235',
-  QUARTA: '#BF8F00',
-  QUINTA: '#C00000',
-  SEXTA: '#7030A0',
+
+const LINHA_DIA = {
+  SEGUNDA: { cor: '#3E6E91', nome: 'Linha Segunda' },
+  TERÇA: { cor: '#6B7F3F', nome: 'Linha Terça' },
+  QUARTA: { cor: '#B6862F', nome: 'Linha Quarta' },
+  QUINTA: { cor: '#8C3F4F', nome: 'Linha Quinta' },
+  SEXTA: { cor: '#5B5285', nome: 'Linha Sexta' },
 }
 
-const RODIZIO_COR = {
-  Fora: { bg: '#E2F0D9', fg: '#2E7D32' },
-  Dentro: { bg: '#FCE4E4', fg: '#C62828' },
-  Confirmar: { bg: '#FFF2CC', fg: '#B7791F' },
+const RODIZIO_INFO = {
+  Fora: { cor: '#3F6B4D', label: 'Fora do anel' },
+  Dentro: { cor: '#8C3F4F', label: 'Dentro do anel' },
+  Confirmar: { cor: '#B6862F', label: 'Confirmar' },
 }
 
-const STATUS_COR = {
-  Visitado: { bg: '#E2F0D9', fg: '#2E7D32' },
-  Pendente: { bg: '#FFF2CC', fg: '#B7791F' },
-  Reagendado: { bg: '#FFE6CC', fg: '#C0610C' },
-  Cancelado: { bg: '#FCE4E4', fg: '#C62828' },
+const STATUS_INFO = {
+  Visitado: { cor: '#3F6B4D', label: 'Visitado' },
+  Pendente: { cor: '#B6862F', label: 'Pendente' },
+  Reagendado: { cor: '#A0622E', label: 'Reagendado' },
+  Cancelado: { cor: '#8C3F4F', label: 'Cancelado' },
 }
 
-function Badge({ texto, cores }) {
-  const c = cores[texto] || { bg: '#eee', fg: '#555' }
+function FontLoader() {
   return (
-    <span
-      style={{
-        background: c.bg,
-        color: c.fg,
-        padding: '3px 10px',
-        borderRadius: 999,
-        fontSize: 12,
-        fontWeight: 600,
-        whiteSpace: 'nowrap',
-      }}
-    >
-      {texto}
+    <style>{`
+      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+      * { box-sizing: border-box; }
+      body { margin: 0; }
+      .av-root, .av-root * { font-family: 'Inter', system-ui, sans-serif; }
+      .av-display { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; }
+      .av-mono { font-family: 'IBM Plex Mono', monospace; }
+      .av-root ::selection { background: ${COR.amber}; color: ${COR.ink}; }
+      .av-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
+      .av-scroll::-webkit-scrollbar-thumb { background: ${COR.line}; border-radius: 4px; }
+    `}</style>
+  )
+}
+
+function Dot({ cor, size = 9 }) {
+  return (
+    <span style={{
+      display: 'inline-block', width: size, height: size, borderRadius: '50%',
+      background: cor, flexShrink: 0,
+    }} />
+  )
+}
+
+function Etiqueta({ texto, info }) {
+  const i = info[texto] || { cor: COR.textSecondary, label: texto }
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 6,
+      fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+      color: COR.textSecondary,
+    }}>
+      <Dot cor={i.cor} size={7} />
+      {i.label}
     </span>
   )
 }
 
-function Card({ children, style }) {
+function Painel({ children, style }) {
   return (
-    <div
-      style={{
-        background: '#fff',
-        borderRadius: 12,
-        boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-        padding: 20,
-        ...style,
-      }}
-    >
+    <div style={{
+      background: COR.paperRaised,
+      border: `1px solid ${COR.line}`,
+      borderRadius: 6,
+      padding: 20,
+      ...style,
+    }}>
       {children}
     </div>
   )
 }
 
 function Botao({ children, onClick, variant = 'primary', disabled, type, style }) {
-  const base = {
-    border: 'none',
-    borderRadius: 8,
-    padding: '10px 16px',
-    fontSize: 14,
-    fontWeight: 600,
-    cursor: disabled ? 'not-allowed' : 'pointer',
-    opacity: disabled ? 0.6 : 1,
-  }
   const variants = {
-    primary: { background: 'var(--accent, #29abe2)', color: '#fff' },
-    secondary: { background: '#eef1f5', color: '#1a2744' },
-    danger: { background: '#dc2626', color: '#fff' },
+    primary: { background: COR.ink, color: COR.textOnInk, border: `1px solid ${COR.ink}` },
+    amber: { background: COR.amber, color: COR.ink, border: `1px solid ${COR.amber}` },
+    ghost: { background: 'transparent', color: COR.textPrimary, border: `1px solid ${COR.line}` },
   }
   return (
     <button
       type={type || 'button'}
       onClick={onClick}
       disabled={disabled}
-      style={{ ...base, ...variants[variant], ...style }}
+      style={{
+        borderRadius: 4,
+        padding: '9px 16px',
+        fontSize: 13,
+        fontWeight: 600,
+        letterSpacing: '0.01em',
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.5 : 1,
+        transition: 'opacity 0.15s',
+        ...variants[variant],
+        ...style,
+      }}
     >
       {children}
     </button>
   )
 }
 
-function Input(props) {
+function Campo({ label, ...props }) {
   return (
-    <input
-      {...props}
-      style={{
-        width: '100%',
-        padding: '9px 12px',
-        borderRadius: 8,
-        border: '1px solid #d8dde3',
-        fontSize: 14,
-        boxSizing: 'border-box',
-        ...(props.style || {}),
-      }}
-    />
+    <label style={{ display: 'block', fontSize: 12 }}>
+      {label && (
+        <span style={{
+          display: 'block', marginBottom: 5, color: COR.textSecondary,
+          fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase', fontSize: 10.5,
+        }}>{label}</span>
+      )}
+      <input
+        {...props}
+        style={{
+          width: '100%', padding: '9px 11px', borderRadius: 4,
+          border: `1px solid ${COR.line}`, fontSize: 14, color: COR.textPrimary,
+          background: COR.paper, fontFamily: 'Inter, sans-serif',
+          ...(props.style || {}),
+        }}
+      />
+    </label>
   )
 }
 
@@ -109,27 +156,23 @@ export default function AdminVisitas() {
   const [senhaDigitada, setSenhaDigitada] = useState('')
   const [erroSenha, setErroSenha] = useState('')
 
-  const [aba, setAba] = useState('roteiro') // roteiro | clientes | historico | painel
+  const [aba, setAba] = useState('roteiro')
   const [clientes, setClientes] = useState([])
   const [visitas, setVisitas] = useState([])
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
 
-  const [novoCliente, setNovoCliente] = useState({
-    nome: '', cnpj: '', cep: '', endereco: '', bairro: '',
-  })
+  const [novoCliente, setNovoCliente] = useState({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '' })
   const [salvandoCliente, setSalvandoCliente] = useState(false)
 
-  const [modalVisita, setModalVisita] = useState(null) // { clienteId, nome } | null
+  const [modalVisita, setModalVisita] = useState(null)
   const [formVisita, setFormVisita] = useState({ status: 'Visitado', data: '', observacao: '' })
   const [salvandoVisita, setSalvandoVisita] = useState(false)
 
   const [filtroMes, setFiltroMes] = useState('')
 
   useEffect(() => {
-    if (autenticado) {
-      carregarTudo()
-    }
+    if (autenticado) carregarTudo()
   }, [autenticado])
 
   async function carregarTudo() {
@@ -145,90 +188,67 @@ export default function AdminVisitas() {
       setClientes(cli || [])
       setVisitas(vis || [])
     } catch (err) {
-      setErro('Erro ao carregar dados: ' + err.message)
+      setErro(
+        'Não consegui carregar os dados (' + err.message + '). Se a tabela existe mas continua vazia ' +
+        'aqui, o motivo mais comum é o RLS bloqueando a leitura — no SQL Editor do Supabase, rode: ' +
+        '"ALTER TABLE carteira_clientes DISABLE ROW LEVEL SECURITY;" (e o mesmo para carteira_visitas e carteira_regras_cep).'
+      )
     } finally {
       setCarregando(false)
     }
   }
 
   function entrar() {
-    if (senhaDigitada === SENHA_ADMIN) {
-      setAutenticado(true)
-      setErroSenha('')
-    } else {
-      setErroSenha('Senha incorreta')
-    }
+    if (senhaDigitada === SENHA_ADMIN) { setAutenticado(true); setErroSenha('') }
+    else setErroSenha('Senha incorreta.')
   }
 
-  // ultima visita registrada por cliente (a mais recente por data, depois por criado_em)
   const ultimaVisitaPorCliente = useMemo(() => {
     const map = {}
     for (const v of visitas) {
       const atual = map[v.cliente_id]
-      if (!atual) {
-        map[v.cliente_id] = v
-      } else {
-        const dAtual = atual.data_visita + 'T' + (atual.criado_em || '')
-        const dNova = v.data_visita + 'T' + (v.criado_em || '')
-        if (dNova > dAtual) map[v.cliente_id] = v
-      }
+      if (!atual) { map[v.cliente_id] = v; continue }
+      const dAtual = atual.data_visita + 'T' + (atual.criado_em || '')
+      const dNova = v.data_visita + 'T' + (v.criado_em || '')
+      if (dNova > dAtual) map[v.cliente_id] = v
     }
     return map
   }, [visitas])
 
-  function statusDoCliente(clienteId) {
-    return ultimaVisitaPorCliente[clienteId]?.status || 'Pendente'
-  }
+  function statusDoCliente(id) { return ultimaVisitaPorCliente[id]?.status || 'Pendente' }
 
   async function salvarNovoCliente(e) {
     e.preventDefault()
-    if (!novoCliente.nome || !novoCliente.cep) {
-      setErro('Preencha pelo menos Nome e CEP.')
-      return
-    }
-    setSalvandoCliente(true)
-    setErro('')
+    if (!novoCliente.nome || !novoCliente.cep) { setErro('Informe ao menos o nome e o CEP.'); return }
+    setSalvandoCliente(true); setErro('')
     try {
       const { error } = await supabase.from('carteira_clientes').insert([novoCliente])
       if (error) throw error
       setNovoCliente({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '' })
       await carregarTudo()
-    } catch (err) {
-      setErro('Erro ao salvar cliente: ' + err.message)
-    } finally {
-      setSalvandoCliente(false)
-    }
+    } catch (err) { setErro('Não consegui salvar o cliente: ' + err.message) }
+    finally { setSalvandoCliente(false) }
   }
 
   function abrirModalVisita(cliente) {
     setModalVisita({ clienteId: cliente.id, nome: cliente.nome })
-    setFormVisita({
-      status: 'Visitado',
-      data: new Date().toISOString().slice(0, 10),
-      observacao: '',
-    })
+    setFormVisita({ status: 'Visitado', data: new Date().toISOString().slice(0, 10), observacao: '' })
   }
 
   async function salvarVisita(e) {
     e.preventDefault()
     if (!modalVisita) return
-    setSalvandoVisita(true)
-    setErro('')
+    setSalvandoVisita(true); setErro('')
     try {
       const { error } = await supabase.from('carteira_visitas').insert([{
-        cliente_id: modalVisita.clienteId,
-        data_visita: formVisita.data,
-        status: formVisita.status,
-        observacao: formVisita.observacao,
+        cliente_id: modalVisita.clienteId, data_visita: formVisita.data,
+        status: formVisita.status, observacao: formVisita.observacao,
       }])
       if (error) throw error
       setModalVisita(null)
       await carregarTudo()
-    } catch (err) {
-      setErro('Erro ao registrar visita: ' + err.message)
-    } finally {
-      setSalvandoVisita(false)
-    }
+    } catch (err) { setErro('Não consegui registrar a visita: ' + err.message) }
+    finally { setSalvandoVisita(false) }
   }
 
   const clientesPorDia = useMemo(() => {
@@ -242,362 +262,411 @@ export default function AdminVisitas() {
     return { map, outros }
   }, [clientes])
 
-  const painelPorDia = useMemo(() => {
-    return DIAS.map((d) => {
-      const lista = clientesPorDia.map[d]
-      const total = lista.length
-      const visitados = lista.filter((c) => statusDoCliente(c.id) === 'Visitado').length
-      const pendentes = lista.filter((c) => statusDoCliente(c.id) === 'Pendente').length
-      const reagendados = lista.filter((c) => statusDoCliente(c.id) === 'Reagendado').length
-      return { dia: d, total, visitados, pendentes, reagendados }
-    })
+  const painelPorDia = useMemo(() => DIAS.map((d) => {
+    const lista = clientesPorDia.map[d]
+    const total = lista.length
+    const visitados = lista.filter((c) => statusDoCliente(c.id) === 'Visitado').length
+    const pendentes = lista.filter((c) => statusDoCliente(c.id) === 'Pendente').length
+    const reagendados = lista.filter((c) => statusDoCliente(c.id) === 'Reagendado').length
+    return { dia: d, total, visitados, pendentes, reagendados }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [clientesPorDia, ultimaVisitaPorCliente])
+  }), [clientesPorDia, ultimaVisitaPorCliente])
 
   const visitasFiltradas = useMemo(() => {
     if (!filtroMes) return visitas
     return visitas.filter((v) => (v.data_visita || '').startsWith(filtroMes))
   }, [visitas, filtroMes])
 
-  function nomeCliente(id) {
-    return clientes.find((c) => c.id === id)?.nome || '(cliente removido)'
-  }
+  function nomeCliente(id) { return clientes.find((c) => c.id === id)?.nome || '(cliente removido)' }
 
-  // ---------------- TELA DE SENHA ----------------
+  const totalVisitado = clientes.filter((c) => statusDoCliente(c.id) === 'Visitado').length
+  const totalPendente = clientes.filter((c) => statusDoCliente(c.id) === 'Pendente').length
+
   if (!autenticado) {
     return (
-      <div style={{
-        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-        background: 'var(--primary, #0f1f33)', fontFamily: 'system-ui, sans-serif',
-      }}>
-        <Card style={{ width: 320 }}>
-          <h2 style={{ marginTop: 0, color: 'var(--primary, #0f1f33)' }}>Carteira de Visitas</h2>
-          <p style={{ color: '#666', fontSize: 14 }}>Área restrita</p>
-          <Input
-            type="password"
-            placeholder="Senha"
-            value={senhaDigitada}
-            onChange={(e) => setSenhaDigitada(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && entrar()}
-          />
-          {erroSenha && <p style={{ color: '#dc2626', fontSize: 13 }}>{erroSenha}</p>}
-          <Botao onClick={entrar} style={{ width: '100%', marginTop: 12 }}>Entrar</Botao>
-        </Card>
+      <div className="av-root">
+        <FontLoader />
+        <div style={{
+          minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          background: COR.ink, padding: 20,
+        }}>
+          <div style={{ width: 360 }}>
+            <div style={{ marginBottom: 28, textAlign: 'center' }}>
+              <div className="av-display" style={{ color: COR.amber, fontSize: 13, fontWeight: 700, letterSpacing: '0.12em' }}>
+                LIMPAR AUTO
+              </div>
+              <div className="av-display" style={{ color: COR.textOnInk, fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+                Carteira de Visitas
+              </div>
+            </div>
+            <Painel style={{ background: COR.paperRaised }}>
+              <Campo
+                label="Senha de acesso"
+                type="password"
+                value={senhaDigitada}
+                onChange={(e) => setSenhaDigitada(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && entrar()}
+                autoFocus
+              />
+              {erroSenha && (
+                <p style={{ color: '#8C3F4F', fontSize: 12.5, marginTop: 8, marginBottom: 0 }}>{erroSenha}</p>
+              )}
+              <Botao variant="amber" onClick={entrar} style={{ width: '100%', marginTop: 16 }}>
+                Entrar
+              </Botao>
+            </Painel>
+          </div>
+        </div>
       </div>
     )
   }
 
-  // ---------------- APP PRINCIPAL ----------------
+  const abas = [
+    ['roteiro', 'Roteiro semanal'],
+    ['clientes', 'Clientes'],
+    ['historico', 'Histórico'],
+    ['painel', 'Painel'],
+  ]
+
   return (
-    <div style={{ fontFamily: 'system-ui, sans-serif', background: '#f4f6f8', minHeight: '100vh' }}>
-      <div style={{ background: 'var(--primary, #0f1f33)', color: '#fff', padding: '18px 24px' }}>
-        <h1 style={{ margin: 0, fontSize: 20 }}>Carteira de Visitas — BASE SP</h1>
-        <p style={{ margin: '4px 0 0', fontSize: 13, opacity: 0.8 }}>LimpAr Auto Gestão Comercial</p>
-      </div>
+    <div className="av-root" style={{ minHeight: '100vh', background: COR.paper }}>
+      <FontLoader />
 
-      <div style={{ display: 'flex', gap: 8, padding: '16px 24px 0' }}>
-        {[
-          ['roteiro', 'Roteiro Semanal'],
-          ['clientes', 'Clientes'],
-          ['historico', 'Histórico de Visitas'],
-          ['painel', 'Painel'],
-        ].map(([key, label]) => (
-          <button
-            key={key}
-            onClick={() => setAba(key)}
-            style={{
-              border: 'none',
-              borderRadius: '8px 8px 0 0',
-              padding: '10px 18px',
-              fontSize: 14,
-              fontWeight: 600,
-              cursor: 'pointer',
-              background: aba === key ? '#fff' : 'transparent',
-              color: aba === key ? 'var(--primary, #0f1f33)' : '#fff',
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      <header style={{ background: COR.ink, padding: '20px 28px 0' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+          <div>
+            <div style={{ color: COR.amber, fontSize: 11, fontWeight: 700, letterSpacing: '0.14em' }}>
+              LIMPAR AUTO · BASE SP
+            </div>
+            <div className="av-display" style={{ color: COR.textOnInk, fontSize: 22, fontWeight: 700, marginTop: 3 }}>
+              Carteira de Visitas
+            </div>
+          </div>
+          <div className="av-mono" style={{ color: COR.textOnInkSoft, fontSize: 12, textAlign: 'right' }}>
+            <div>{totalVisitado} visitados · {totalPendente} pendentes</div>
+            <div>{clientes.length} clientes na carteira</div>
+          </div>
+        </div>
 
-      <div style={{ padding: 24 }}>
+        <nav style={{ display: 'flex', gap: 4, marginTop: 22 }}>
+          {abas.map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setAba(key)}
+              style={{
+                background: 'transparent', border: 'none', cursor: 'pointer',
+                padding: '10px 4px', marginRight: 22,
+                fontSize: 13.5, fontWeight: 600,
+                color: aba === key ? COR.textOnInk : COR.textOnInkSoft,
+                borderBottom: aba === key ? `2px solid ${COR.amber}` : '2px solid transparent',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </nav>
+      </header>
+
+      <main style={{ padding: '24px 28px 60px', maxWidth: 1180, margin: '0 auto' }}>
         {erro && (
-          <Card style={{ background: '#fee2e2', color: '#991b1b', marginBottom: 16 }}>{erro}</Card>
+          <Painel style={{ background: '#FBEEEC', borderColor: '#E2B6AC', color: '#7A3328', marginBottom: 18, fontSize: 13.5, lineHeight: 1.5 }}>
+            {erro}
+          </Painel>
         )}
-        {carregando && <p>Carregando...</p>}
+        {carregando && <p style={{ color: COR.textSecondary }}>Carregando carteira…</p>}
 
-        {/* ---------------- ABA ROTEIRO SEMANAL ---------------- */}
         {!carregando && aba === 'roteiro' && (
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
-            {DIAS.map((d) => (
-              <Card key={d}>
-                <div style={{
-                  background: DIA_COR[d], color: '#fff', padding: '8px 12px',
-                  borderRadius: 8, fontWeight: 700, marginBottom: 12, textAlign: 'center',
-                }}>
-                  {d} ({clientesPorDia.map[d].length})
-                </div>
-                {clientesPorDia.map[d].length === 0 && (
-                  <p style={{ color: '#999', fontSize: 13 }}>Nenhum cliente neste dia.</p>
-                )}
-                {clientesPorDia.map[d].map((c) => (
-                  <div key={c.id} style={{
-                    padding: '10px 0', borderBottom: '1px solid #eee',
+          <>
+            {clientes.length === 0 && !erro && (
+              <Painel>
+                <p style={{ margin: 0, color: COR.textSecondary, fontSize: 14 }}>
+                  Nenhum cliente na carteira ainda. Cadastre o primeiro na aba <strong>Clientes</strong>.
+                </p>
+              </Painel>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 0 }}>
+              {DIAS.map((d, idx) => {
+                const lc = LINHA_DIA[d]
+                const lista = clientesPorDia.map[d]
+                return (
+                  <div key={d} style={{
+                    padding: '0 16px',
+                    borderLeft: idx === 0 ? 'none' : `1px solid ${COR.line}`,
                   }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{c.nome}</div>
-                    <div style={{ fontSize: 12, color: '#777' }}>{c.bairro}</div>
-                    <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                      <Badge texto={c.status_rodizio} cores={RODIZIO_COR} />
-                      <Badge texto={statusDoCliente(c.id)} cores={STATUS_COR} />
-                      <button
-                        onClick={() => abrirModalVisita(c)}
-                        style={{
-                          marginLeft: 'auto', border: 'none', background: 'none',
-                          color: 'var(--accent, #29abe2)', fontSize: 12, fontWeight: 600,
-                          cursor: 'pointer', textDecoration: 'underline',
-                        }}
-                      >
-                        marcar visita
-                      </button>
+                    <div style={{ marginBottom: 16 }}>
+                      <div className="av-display" style={{ fontSize: 15, fontWeight: 700, color: COR.textPrimary }}>
+                        {d}
+                      </div>
+                      <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 2 }}>
+                        {lista.length} {lista.length === 1 ? 'parada' : 'paradas'}
+                      </div>
+                    </div>
+
+                    <div style={{ position: 'relative' }}>
+                      {lista.length > 0 && (
+                        <div style={{
+                          position: 'absolute', left: 4, top: 6, bottom: 6, width: 2,
+                          background: lc.cor, opacity: 0.35, borderRadius: 1,
+                        }} />
+                      )}
+                      {lista.map((c) => {
+                        const st = STATUS_INFO[statusDoCliente(c.id)]
+                        return (
+                          <div key={c.id} style={{ position: 'relative', paddingLeft: 22, paddingBottom: 18 }}>
+                            <div style={{
+                              position: 'absolute', left: 0, top: 4, width: 10, height: 10, borderRadius: '50%',
+                              background: COR.paper, border: `2px solid ${lc.cor}`,
+                            }} />
+                            <div style={{ fontSize: 13.5, fontWeight: 600, color: COR.textPrimary, lineHeight: 1.3 }}>
+                              {c.nome}
+                            </div>
+                            <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 2 }}>
+                              {c.bairro}
+                            </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                              <Etiqueta texto={c.status_rodizio} info={RODIZIO_INFO} />
+                              <span style={{ width: 1, height: 10, background: COR.line }} />
+                              <span style={{ fontSize: 11, fontWeight: 600, color: st.cor, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                                {st.label}
+                              </span>
+                            </div>
+                            <button
+                              onClick={() => abrirModalVisita(c)}
+                              style={{
+                                marginTop: 7, border: 'none', background: 'none', padding: 0,
+                                color: COR.amberDeep, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                              }}
+                            >
+                              Registrar visita →
+                            </button>
+                          </div>
+                        )
+                      })}
+                      {lista.length === 0 && (
+                        <p style={{ color: COR.textSecondary, fontSize: 12.5, paddingLeft: 4 }}>Sem paradas.</p>
+                      )}
                     </div>
                   </div>
-                ))}
-              </Card>
-            ))}
+                )
+              })}
+            </div>
+
             {clientesPorDia.outros.length > 0 && (
-              <Card>
-                <div style={{
-                  background: '#999', color: '#fff', padding: '8px 12px',
-                  borderRadius: 8, fontWeight: 700, marginBottom: 12, textAlign: 'center',
-                }}>
-                  A confirmar ({clientesPorDia.outros.length})
+              <Painel style={{ marginTop: 28 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: COR.textSecondary, marginBottom: 12 }}>
+                  A CONFIRMAR — CEP AINDA NÃO MAPEADO ({clientesPorDia.outros.length})
                 </div>
                 {clientesPorDia.outros.map((c) => (
-                  <div key={c.id} style={{ padding: '10px 0', borderBottom: '1px solid #eee' }}>
-                    <div style={{ fontWeight: 600, fontSize: 14 }}>{c.nome}</div>
-                    <div style={{ fontSize: 12, color: '#777' }}>{c.cep} — {c.bairro}</div>
+                  <div key={c.id} style={{ padding: '8px 0', borderBottom: `1px solid ${COR.lineSoft}`, fontSize: 13.5 }}>
+                    <strong>{c.nome}</strong>
+                    <span className="av-mono" style={{ color: COR.textSecondary, marginLeft: 8 }}>{c.cep}</span>
+                    <span style={{ color: COR.textSecondary, marginLeft: 8 }}>{c.bairro}</span>
                   </div>
                 ))}
-              </Card>
+              </Painel>
             )}
-          </div>
+          </>
         )}
 
-        {/* ---------------- ABA CLIENTES ---------------- */}
         {!carregando && aba === 'clientes' && (
           <>
-            <Card style={{ marginBottom: 20 }}>
-              <h3 style={{ marginTop: 0 }}>Adicionar cliente</h3>
+            <Painel style={{ marginBottom: 20 }}>
+              <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
+                Cadastrar cliente
+              </div>
               <form onSubmit={salvarNovoCliente}>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-                  <Input placeholder="Nome *" value={novoCliente.nome}
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+                  <Campo label="Nome *" value={novoCliente.nome}
                     onChange={(e) => setNovoCliente({ ...novoCliente, nome: e.target.value })} />
-                  <Input placeholder="CNPJ" value={novoCliente.cnpj}
+                  <Campo label="CNPJ" value={novoCliente.cnpj}
                     onChange={(e) => setNovoCliente({ ...novoCliente, cnpj: e.target.value })} />
-                  <Input placeholder="CEP * (ex: 05521-200)" value={novoCliente.cep}
+                  <Campo label="CEP *" placeholder="00000-000" value={novoCliente.cep}
                     onChange={(e) => setNovoCliente({ ...novoCliente, cep: e.target.value })} />
-                  <Input placeholder="Endereço" value={novoCliente.endereco}
+                  <Campo label="Endereço" value={novoCliente.endereco}
                     onChange={(e) => setNovoCliente({ ...novoCliente, endereco: e.target.value })} />
-                  <Input placeholder="Bairro" value={novoCliente.bairro}
+                  <Campo label="Bairro" value={novoCliente.bairro}
                     onChange={(e) => setNovoCliente({ ...novoCliente, bairro: e.target.value })} />
                 </div>
-                <Botao type="submit" disabled={salvandoCliente} style={{ marginTop: 12 }}>
-                  {salvandoCliente ? 'Salvando...' : 'Salvar cliente'}
+                <Botao type="submit" variant="amber" disabled={salvandoCliente} style={{ marginTop: 16 }}>
+                  {salvandoCliente ? 'Salvando…' : 'Salvar cliente'}
                 </Botao>
               </form>
-            </Card>
+            </Painel>
 
-            <Card>
-              <h3 style={{ marginTop: 0 }}>Todos os clientes ({clientes.length})</h3>
-              <div style={{ overflowX: 'auto' }}>
+            <Painel>
+              <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
+                Todos os clientes ({clientes.length})
+              </div>
+              <div className="av-scroll" style={{ overflowX: 'auto' }}>
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: '2px solid #eee' }}>
-                      <th style={{ padding: 8 }}>Nome</th>
-                      <th style={{ padding: 8 }}>CEP</th>
-                      <th style={{ padding: 8 }}>Bairro</th>
-                      <th style={{ padding: 8 }}>Dia</th>
-                      <th style={{ padding: 8 }}>Rodízio</th>
-                      <th style={{ padding: 8 }}>Status</th>
-                      <th style={{ padding: 8 }}></th>
+                    <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
+                      {['Nome', 'CEP', 'Bairro', 'Dia', 'Rodízio', 'Status', ''].map((h) => (
+                        <th key={h} style={{
+                          padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700,
+                          color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase',
+                        }}>{h}</th>
+                      ))}
                     </tr>
                   </thead>
                   <tbody>
                     {clientes.map((c) => (
-                      <tr key={c.id} style={{ borderBottom: '1px solid #f2f2f2' }}>
-                        <td style={{ padding: 8, fontWeight: 600 }}>{c.nome}</td>
-                        <td style={{ padding: 8 }}>{c.cep}</td>
-                        <td style={{ padding: 8 }}>{c.bairro}</td>
-                        <td style={{ padding: 8 }}>{c.dia_sugerido}</td>
-                        <td style={{ padding: 8 }}><Badge texto={c.status_rodizio} cores={RODIZIO_COR} /></td>
-                        <td style={{ padding: 8 }}><Badge texto={statusDoCliente(c.id)} cores={STATUS_COR} /></td>
-                        <td style={{ padding: 8 }}>
+                      <tr key={c.id} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
+                        <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{c.nome}</td>
+                        <td className="av-mono" style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{c.cep}</td>
+                        <td style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{c.bairro}</td>
+                        <td style={{ padding: '10px 10px 10px 0' }}>{c.dia_sugerido}</td>
+                        <td style={{ padding: '10px 10px 10px 0' }}><Etiqueta texto={c.status_rodizio} info={RODIZIO_INFO} /></td>
+                        <td style={{ padding: '10px 10px 10px 0' }}><Etiqueta texto={statusDoCliente(c.id)} info={STATUS_INFO} /></td>
+                        <td style={{ padding: '10px 0' }}>
                           <button onClick={() => abrirModalVisita(c)} style={{
-                            border: 'none', background: 'none', color: 'var(--accent, #29abe2)',
+                            border: 'none', background: 'none', color: COR.amberDeep,
                             cursor: 'pointer', fontSize: 12, fontWeight: 600,
-                          }}>marcar visita</button>
+                          }}>visitar</button>
                         </td>
                       </tr>
                     ))}
                   </tbody>
                 </table>
+                {clientes.length === 0 && !erro && (
+                  <p style={{ color: COR.textSecondary, fontSize: 13, padding: '12px 0' }}>Nenhum cliente cadastrado ainda.</p>
+                )}
               </div>
-            </Card>
+            </Painel>
           </>
         )}
 
-        {/* ---------------- ABA HISTORICO ---------------- */}
         {!carregando && aba === 'historico' && (
-          <Card>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 16 }}>
-              <h3 style={{ margin: 0 }}>Histórico de Visitas</h3>
+          <Painel>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div className="av-display" style={{ fontSize: 15, fontWeight: 700 }}>Histórico de visitas</div>
               <input
                 type="month"
                 value={filtroMes}
                 onChange={(e) => setFiltroMes(e.target.value)}
-                style={{ padding: 8, borderRadius: 8, border: '1px solid #d8dde3' }}
+                style={{ padding: 8, borderRadius: 4, border: `1px solid ${COR.line}`, fontSize: 13 }}
               />
               {filtroMes && (
                 <button onClick={() => setFiltroMes('')} style={{
-                  border: 'none', background: 'none', color: '#999', cursor: 'pointer', fontSize: 13,
+                  border: 'none', background: 'none', color: COR.textSecondary, cursor: 'pointer', fontSize: 12.5,
                 }}>limpar filtro</button>
               )}
             </div>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
-                <tr style={{ textAlign: 'left', borderBottom: '2px solid #eee' }}>
-                  <th style={{ padding: 8 }}>Data</th>
-                  <th style={{ padding: 8 }}>Cliente</th>
-                  <th style={{ padding: 8 }}>Status</th>
-                  <th style={{ padding: 8 }}>Observação</th>
+                <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
+                  {['Data', 'Cliente', 'Status', 'Observação'].map((h) => (
+                    <th key={h} style={{
+                      padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700,
+                      color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase',
+                    }}>{h}</th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
                 {visitasFiltradas.map((v) => (
-                  <tr key={v.id} style={{ borderBottom: '1px solid #f2f2f2' }}>
-                    <td style={{ padding: 8 }}>{v.data_visita}</td>
-                    <td style={{ padding: 8, fontWeight: 600 }}>{nomeCliente(v.cliente_id)}</td>
-                    <td style={{ padding: 8 }}><Badge texto={v.status} cores={STATUS_COR} /></td>
-                    <td style={{ padding: 8, color: '#555' }}>{v.observacao}</td>
+                  <tr key={v.id} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
+                    <td className="av-mono" style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{v.data_visita}</td>
+                    <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{nomeCliente(v.cliente_id)}</td>
+                    <td style={{ padding: '10px 10px 10px 0' }}><Etiqueta texto={v.status} info={STATUS_INFO} /></td>
+                    <td style={{ padding: '10px 0', color: COR.textSecondary }}>{v.observacao}</td>
                   </tr>
                 ))}
                 {visitasFiltradas.length === 0 && (
-                  <tr><td colSpan={4} style={{ padding: 16, textAlign: 'center', color: '#999' }}>
+                  <tr><td colSpan={4} style={{ padding: '16px 0', textAlign: 'center', color: COR.textSecondary }}>
                     Nenhuma visita registrada {filtroMes ? 'neste mês' : 'ainda'}.
                   </td></tr>
                 )}
               </tbody>
             </table>
-          </Card>
+          </Painel>
         )}
 
-        {/* ---------------- ABA PAINEL ---------------- */}
         {!carregando && aba === 'painel' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 14, marginBottom: 20 }}>
-              <Card style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--primary, #0f1f33)' }}>{clientes.length}</div>
-                <div style={{ color: '#777', fontSize: 13 }}>Total de clientes</div>
-              </Card>
-              <Card style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#2E7D32' }}>
-                  {clientes.filter((c) => statusDoCliente(c.id) === 'Visitado').length}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, marginBottom: 24, background: COR.line }}>
+              {[
+                ['Total na carteira', clientes.length, COR.textPrimary],
+                ['Visitados', totalVisitado, '#3F6B4D'],
+                ['Pendentes', totalPendente, '#B6862F'],
+                ['Registros no histórico', visitas.length, COR.amberDeep],
+              ].map(([label, valor, cor]) => (
+                <div key={label} style={{ background: COR.paperRaised, padding: '18px 16px' }}>
+                  <div className="av-mono" style={{ fontSize: 30, fontWeight: 500, color: cor }}>{valor}</div>
+                  <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 4 }}>{label}</div>
                 </div>
-                <div style={{ color: '#777', fontSize: 13 }}>Visitados</div>
-              </Card>
-              <Card style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 700, color: '#B7791F' }}>
-                  {clientes.filter((c) => statusDoCliente(c.id) === 'Pendente').length}
-                </div>
-                <div style={{ color: '#777', fontSize: 13 }}>Pendentes</div>
-              </Card>
-              <Card style={{ textAlign: 'center' }}>
-                <div style={{ fontSize: 28, fontWeight: 700, color: 'var(--accent, #29abe2)' }}>
-                  {visitas.length}
-                </div>
-                <div style={{ color: '#777', fontSize: 13 }}>Visitas no histórico</div>
-              </Card>
+              ))}
             </div>
 
-            <Card>
-              <h3 style={{ marginTop: 0 }}>Por dia da semana</h3>
-              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                <thead>
-                  <tr style={{ textAlign: 'left', borderBottom: '2px solid #eee' }}>
-                    <th style={{ padding: 8 }}>Dia</th>
-                    <th style={{ padding: 8 }}>Total</th>
-                    <th style={{ padding: 8 }}>Visitados</th>
-                    <th style={{ padding: 8 }}>Pendentes</th>
-                    <th style={{ padding: 8 }}>Reagendados</th>
-                    <th style={{ padding: 8 }}>% concluído</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {painelPorDia.map((p) => (
-                    <tr key={p.dia} style={{ borderBottom: '1px solid #f2f2f2' }}>
-                      <td style={{ padding: 8, fontWeight: 700, color: DIA_COR[p.dia] }}>{p.dia}</td>
-                      <td style={{ padding: 8 }}>{p.total}</td>
-                      <td style={{ padding: 8, color: '#2E7D32', fontWeight: 600 }}>{p.visitados}</td>
-                      <td style={{ padding: 8, color: '#B7791F', fontWeight: 600 }}>{p.pendentes}</td>
-                      <td style={{ padding: 8, color: '#C0610C', fontWeight: 600 }}>{p.reagendados}</td>
-                      <td style={{ padding: 8 }}>
-                        {p.total ? Math.round((p.visitados / p.total) * 100) : 0}%
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </Card>
+            <Painel>
+              <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
+                Progresso por dia
+              </div>
+              {painelPorDia.map((p) => {
+                const pct = p.total ? Math.round((p.visitados / p.total) * 100) : 0
+                return (
+                  <div key={p.dia} style={{ marginBottom: 16 }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                      <span style={{ fontWeight: 700, color: LINHA_DIA[p.dia].cor }}>{p.dia}</span>
+                      <span className="av-mono" style={{ color: COR.textSecondary }}>
+                        {p.visitados}/{p.total} · {pct}%
+                      </span>
+                    </div>
+                    <div style={{ height: 6, background: COR.lineSoft, borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ height: '100%', width: pct + '%', background: LINHA_DIA[p.dia].cor, borderRadius: 3 }} />
+                    </div>
+                  </div>
+                )
+              })}
+            </Painel>
           </>
         )}
-      </div>
+      </main>
 
-      {/* ---------------- MODAL MARCAR VISITA ---------------- */}
       {modalVisita && (
         <div style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50,
+          position: 'fixed', inset: 0, background: 'rgba(20,24,31,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 50, padding: 20,
         }}>
-          <Card style={{ width: 360 }}>
-            <h3 style={{ marginTop: 0 }}>Registrar visita</h3>
-            <p style={{ color: '#666', fontSize: 14 }}>{modalVisita.nome}</p>
+          <div style={{ width: 380, background: COR.paperRaised, borderRadius: 6, padding: 24 }}>
+            <div className="av-display" style={{ fontSize: 16, fontWeight: 700 }}>Registrar visita</div>
+            <p style={{ color: COR.textSecondary, fontSize: 13.5, marginTop: 4, marginBottom: 18 }}>{modalVisita.nome}</p>
             <form onSubmit={salvarVisita}>
-              <label style={{ fontSize: 13, fontWeight: 600 }}>Status</label>
+              <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: COR.textSecondary, letterSpacing: '0.03em', textTransform: 'uppercase', marginBottom: 5 }}>
+                Status
+              </label>
               <select
                 value={formVisita.status}
                 onChange={(e) => setFormVisita({ ...formVisita, status: e.target.value })}
-                style={{ width: '100%', padding: 9, borderRadius: 8, border: '1px solid #d8dde3', marginBottom: 10 }}
+                style={{ width: '100%', padding: 9, borderRadius: 4, border: `1px solid ${COR.line}`, marginBottom: 12, fontSize: 14 }}
               >
                 <option value="Visitado">Visitado</option>
                 <option value="Reagendado">Reagendado</option>
                 <option value="Cancelado">Cancelado</option>
               </select>
 
-              <label style={{ fontSize: 13, fontWeight: 600 }}>Data</label>
-              <Input
-                type="date"
-                value={formVisita.data}
+              <Campo label="Data" type="date" value={formVisita.data}
                 onChange={(e) => setFormVisita({ ...formVisita, data: e.target.value })}
-                style={{ marginBottom: 10 }}
-              />
+                style={{ marginBottom: 12 }} />
 
-              <label style={{ fontSize: 13, fontWeight: 600 }}>Observação</label>
+              <label style={{ display: 'block', fontSize: 10.5, fontWeight: 700, color: COR.textSecondary, letterSpacing: '0.03em', textTransform: 'uppercase', marginBottom: 5 }}>
+                Observação
+              </label>
               <textarea
                 value={formVisita.observacao}
                 onChange={(e) => setFormVisita({ ...formVisita, observacao: e.target.value })}
                 rows={3}
-                style={{ width: '100%', padding: 9, borderRadius: 8, border: '1px solid #d8dde3', marginBottom: 14, boxSizing: 'border-box' }}
+                style={{ width: '100%', padding: 9, borderRadius: 4, border: `1px solid ${COR.line}`, marginBottom: 16, fontSize: 14, fontFamily: 'Inter, sans-serif', resize: 'vertical' }}
               />
 
               <div style={{ display: 'flex', gap: 8 }}>
-                <Botao type="submit" disabled={salvandoVisita}>
-                  {salvandoVisita ? 'Salvando...' : 'Salvar'}
+                <Botao type="submit" variant="amber" disabled={salvandoVisita}>
+                  {salvandoVisita ? 'Salvando…' : 'Salvar visita'}
                 </Botao>
-                <Botao variant="secondary" onClick={() => setModalVisita(null)}>Cancelar</Botao>
+                <Botao variant="ghost" onClick={() => setModalVisita(null)}>Cancelar</Botao>
               </div>
             </form>
-          </Card>
+          </div>
         </div>
       )}
     </div>
