@@ -144,6 +144,7 @@ export default function AdminDashboard() {
         <h1 style={{ fontSize: 20, fontWeight: 700 }}>Dashboard Geral — Todos os Clientes</h1>
         <div style={{ display: 'flex', gap: 10 }}>
           <a href="/" className="btn">← Voltar</a>
+          <a href="/admin/visitas" className="btn">Carteira de Visitas</a>
           <button className="btn" onClick={sair}>Sair</button>
         </div>
       </div>
