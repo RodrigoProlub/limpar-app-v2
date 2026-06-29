@@ -3,6 +3,7 @@ import { supabase } from './supabaseClient'
 import { useCliente } from './ClienteContext'
 import SeletorCliente from './pages/SeletorCliente'
 import AdminDashboard from './pages/AdminDashboard'
+import AdminVisitas from './pages/AdminVisitas'
 import Dashboard from './pages/Dashboard'
 import Vendas from './pages/Vendas'
 import Vendedores from './pages/Vendedores'
@@ -73,6 +74,9 @@ export default function App() {
   if (path === 'admin') {
     return <AdminDashboard />
   }
+  if (path === 'admin/visitas') {
+  return <AdminVisitas />
+}
 
   if (clienteLoading) {
     return <div style={{ padding: '3rem', textAlign: 'center' }}>Carregando...</div>
