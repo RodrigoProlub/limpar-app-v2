@@ -47,6 +47,13 @@ const STATUS_INFO = {
   Cancelado: { cor: '#8C3F4F', label: 'Cancelado' },
 }
 
+const SITUACAO_INFO = {
+  Ativo: { cor: '#3F6B4D', label: 'Ativo' },
+  'Prospecção': { cor: '#3E6E91', label: 'Prospecção' },
+  Inativo: { cor: '#8A8377', label: 'Inativo' },
+}
+const SITUACOES = ['Ativo', 'Prospecção', 'Inativo']
+
 function FontLoader() {
   return (
     <style>{`
@@ -151,6 +158,25 @@ function Campo({ label, ...props }) {
   )
 }
 
+function SeletorSituacao({ cliente, onChange }) {
+  const info = SITUACAO_INFO[cliente.situacao] || SITUACAO_INFO.Ativo
+  return (
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+      <Dot cor={info.cor} size={7} />
+      <select
+        value={cliente.situacao || 'Ativo'}
+        onChange={(e) => onChange(cliente.id, e.target.value)}
+        style={{
+          border: 'none', background: 'transparent', fontSize: 12, fontWeight: 600,
+          color: COR.textSecondary, cursor: 'pointer', padding: 0,
+        }}
+      >
+        {SITUACOES.map((s) => <option key={s} value={s}>{s}</option>)}
+      </select>
+    </span>
+  )
+}
+
 export default function AdminVisitas() {
   const [autenticado, setAutenticado] = useState(false)
   const [senhaDigitada, setSenhaDigitada] = useState('')
@@ -162,7 +188,7 @@ export default function AdminVisitas() {
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
 
-  const [novoCliente, setNovoCliente] = useState({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '' })
+  const [novoCliente, setNovoCliente] = useState({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo' })
   const [salvandoCliente, setSalvandoCliente] = useState(false)
 
   const [modalVisita, setModalVisita] = useState(null)
@@ -170,6 +196,7 @@ export default function AdminVisitas() {
   const [salvandoVisita, setSalvandoVisita] = useState(false)
 
   const [filtroMes, setFiltroMes] = useState('')
+  const [mostrarInativos, setMostrarInativos] = useState(false)
 
   useEffect(() => {
     if (autenticado) carregarTudo()
@@ -224,10 +251,22 @@ export default function AdminVisitas() {
     try {
       const { error } = await supabase.from('carteira_clientes').insert([novoCliente])
       if (error) throw error
-      setNovoCliente({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '' })
+      setNovoCliente({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo' })
       await carregarTudo()
     } catch (err) { setErro('Não consegui salvar o cliente: ' + err.message) }
     finally { setSalvandoCliente(false) }
+  }
+
+  async function alterarSituacao(clienteId, novaSituacao) {
+    // atualiza a tela na hora (otimista) e confirma no banco em seguida
+    setClientes((prev) => prev.map((c) => c.id === clienteId ? { ...c, situacao: novaSituacao } : c))
+    try {
+      const { error } = await supabase.from('carteira_clientes').update({ situacao: novaSituacao }).eq('id', clienteId)
+      if (error) throw error
+    } catch (err) {
+      setErro('Não consegui salvar a situação: ' + err.message)
+      await carregarTudo()
+    }
   }
 
   function abrirModalVisita(cliente) {
@@ -255,12 +294,13 @@ export default function AdminVisitas() {
     const map = {}
     for (const d of DIAS) map[d] = []
     const outros = []
-    for (const c of clientes) {
+    const base = mostrarInativos ? clientes : clientes.filter((c) => (c.situacao || 'Ativo') !== 'Inativo')
+    for (const c of base) {
       if (DIAS.includes(c.dia_sugerido)) map[c.dia_sugerido].push(c)
       else outros.push(c)
     }
     return { map, outros }
-  }, [clientes])
+  }, [clientes, mostrarInativos])
 
   const painelPorDia = useMemo(() => DIAS.map((d) => {
     const lista = clientesPorDia.map[d]
@@ -377,6 +417,12 @@ export default function AdminVisitas() {
 
         {!carregando && aba === 'roteiro' && (
           <>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: COR.textSecondary, cursor: 'pointer' }}>
+                <input type="checkbox" checked={mostrarInativos} onChange={(e) => setMostrarInativos(e.target.checked)} />
+                Mostrar clientes inativos na rota
+              </label>
+            </div>
             {clientes.length === 0 && !erro && (
               <Painel>
                 <p style={{ margin: 0, color: COR.textSecondary, fontSize: 14 }}>
@@ -429,6 +475,12 @@ export default function AdminVisitas() {
                               <span style={{ fontSize: 11, fontWeight: 600, color: st.cor, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                                 {st.label}
                               </span>
+                              {(c.situacao || 'Ativo') !== 'Ativo' && (
+                                <>
+                                  <span style={{ width: 1, height: 10, background: COR.line }} />
+                                  <Etiqueta texto={c.situacao} info={SITUACAO_INFO} />
+                                </>
+                              )}
                             </div>
                             <button
                               onClick={() => abrirModalVisita(c)}
@@ -486,6 +538,18 @@ export default function AdminVisitas() {
                     onChange={(e) => setNovoCliente({ ...novoCliente, endereco: e.target.value })} />
                   <Campo label="Bairro" value={novoCliente.bairro}
                     onChange={(e) => setNovoCliente({ ...novoCliente, bairro: e.target.value })} />
+                  <label style={{ display: 'block', fontSize: 12 }}>
+                    <span style={{ display: 'block', marginBottom: 5, color: COR.textSecondary, fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase', fontSize: 10.5 }}>
+                      Situação
+                    </span>
+                    <select
+                      value={novoCliente.situacao}
+                      onChange={(e) => setNovoCliente({ ...novoCliente, situacao: e.target.value })}
+                      style={{ width: '100%', padding: '9px 11px', borderRadius: 4, border: `1px solid ${COR.line}`, fontSize: 14, background: COR.paper }}
+                    >
+                      {SITUACOES.map((s) => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </label>
                 </div>
                 <Botao type="submit" variant="amber" disabled={salvandoCliente} style={{ marginTop: 16 }}>
                   {salvandoCliente ? 'Salvando…' : 'Salvar cliente'}
@@ -501,7 +565,7 @@ export default function AdminVisitas() {
                 <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                   <thead>
                     <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
-                      {['Nome', 'CEP', 'Bairro', 'Dia', 'Rodízio', 'Status', ''].map((h) => (
+                      {['Nome', 'CEP', 'Bairro', 'Dia', 'Rodízio', 'Situação', 'Status', ''].map((h) => (
                         <th key={h} style={{
                           padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700,
                           color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -517,6 +581,9 @@ export default function AdminVisitas() {
                         <td style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{c.bairro}</td>
                         <td style={{ padding: '10px 10px 10px 0' }}>{c.dia_sugerido}</td>
                         <td style={{ padding: '10px 10px 10px 0' }}><Etiqueta texto={c.status_rodizio} info={RODIZIO_INFO} /></td>
+                        <td style={{ padding: '10px 10px 10px 0' }}>
+                          <SeletorSituacao cliente={c} onChange={alterarSituacao} />
+                        </td>
                         <td style={{ padding: '10px 10px 10px 0' }}><Etiqueta texto={statusDoCliente(c.id)} info={STATUS_INFO} /></td>
                         <td style={{ padding: '10px 0' }}>
                           <button onClick={() => abrirModalVisita(c)} style={{
