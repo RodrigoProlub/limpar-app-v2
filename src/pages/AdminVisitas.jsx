@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
+import * as XLSX from 'xlsx'
 
 // =====================================================================
 // SISTEMA DE DESIGN — "Painel de Despacho"
@@ -326,6 +327,96 @@ function diaSemanaHoje() {
   return mapa[new Date().getDay()] || null
 }
 
+// =====================================================================
+// IMPORTAÇÃO DE PLANILHA — identifica as colunas automaticamente,
+// não importa como o usuário nomeou ("Cliente" ou "Nome", "Cep" ou "CEP")
+// =====================================================================
+
+function normalizarTexto(s) {
+  return String(s || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .trim()
+}
+
+function acharColuna(headers, candidatos) {
+  for (const h of headers) {
+    const hn = normalizarTexto(h)
+    if (candidatos.some((c) => hn === c || hn.includes(c))) return h
+  }
+  return null
+}
+
+// Quando o Excel guarda o CEP como número (em vez de texto), o zero da
+// frente some - ex: "06328-150" vira 6328150. Completa de volta pra 8
+// dígitos nesse caso, igual já fazemos no cadastro manual.
+function normalizarCep(valor) {
+  const bruto = String(valor || '').trim()
+  if (/^\d+$/.test(bruto) && bruto.length < 8) {
+    return bruto.padStart(8, '0')
+  }
+  return bruto
+}
+
+function lerPlanilhaClientes(arrayBuffer) {
+  const wb = XLSX.read(arrayBuffer, { type: 'array' })
+  const ws = wb.Sheets[wb.SheetNames[0]]
+  const linhas = XLSX.utils.sheet_to_json(ws, { defval: '' })
+  if (linhas.length === 0) return []
+
+  const headers = Object.keys(linhas[0])
+  const colNome = acharColuna(headers, ['cliente', 'nome', 'razao social'])
+  const colCnpj = acharColuna(headers, ['cnpj'])
+  const colCep = acharColuna(headers, ['cep'])
+  const colEndereco = acharColuna(headers, ['endereco', 'rua', 'logradouro'])
+  const colBairro = acharColuna(headers, ['bairro'])
+
+  return linhas
+    .map((l) => ({
+      nome: String(colNome ? l[colNome] : '').trim(),
+      cnpj: String(colCnpj ? l[colCnpj] : '').trim(),
+      cep: normalizarCep(colCep ? l[colCep] : ''),
+      endereco: String(colEndereco ? l[colEndereco] : '').trim(),
+      bairro: String(colBairro ? l[colBairro] : '').trim(),
+    }))
+    .filter((r) => r.nome && r.cep)
+}
+
+// Busca endereco (ViaCEP) e coordenadas (Nominatim) a partir de um CEP.
+// Usada tanto no cadastro individual quanto na importacao em massa.
+async function buscarEnderecoEGeo(cepDigitos) {
+  const resultado = { encontrado: false, endereco: '', bairro: '', latitude: null, longitude: null }
+  try {
+    const resp = await fetch(`https://viacep.com.br/ws/${cepDigitos}/json/`)
+    const dados = await resp.json()
+    if (dados.erro) return resultado
+
+    resultado.encontrado = true
+    resultado.endereco = dados.logradouro || ''
+    resultado.bairro = dados.bairro
+      ? `${dados.bairro} - ${dados.localidade}/${dados.uf}`
+      : `${dados.localidade}/${dados.uf}`
+
+    try {
+      const enderecoBusca = encodeURIComponent(
+        `${dados.logradouro || ''}, ${dados.bairro || ''}, ${dados.localidade}, ${dados.uf}, Brasil`
+      )
+      const geoResp = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${enderecoBusca}`
+      )
+      const geoDados = await geoResp.json()
+      if (Array.isArray(geoDados) && geoDados.length > 0) {
+        resultado.latitude = parseFloat(geoDados[0].lat)
+        resultado.longitude = parseFloat(geoDados[0].lon)
+      }
+    } catch {
+      // sem coordenadas - tudo bem, o endereco ja foi encontrado
+    }
+  } catch {
+    // CEP nao encontrado ou falha de rede - resultado.encontrado fica false
+  }
+  return resultado
+}
+
 export default function AdminVisitas() {
   const [vendedor, setVendedor] = useState(null) // { id, nome, usuario, admin } | null
   const [usuarioDigitado, setUsuarioDigitado] = useState('')
@@ -343,6 +434,11 @@ export default function AdminVisitas() {
   const [novoCliente, setNovoCliente] = useState({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo', latitude: null, longitude: null })
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [cepEncontrado, setCepEncontrado] = useState(null) // null | true | false
+
+  const [importando, setImportando] = useState(false)
+  const [progressoImport, setProgressoImport] = useState([]) // [{ nome, status, mensagem }]
+  const [resumoImport, setResumoImport] = useState(null) // { total, ok, erro } | null
+  const inputArquivoRef = useRef(null)
   const [modoDia, setModoDia] = useState('auto') // 'auto' | 'manual'
   const [diaManual, setDiaManual] = useState('SEGUNDA')
   const [salvandoCliente, setSalvandoCliente] = useState(false)
@@ -382,49 +478,21 @@ export default function AdminVisitas() {
     const timer = setTimeout(async () => {
       setBuscandoCep(true)
       setCepEncontrado(null)
-      try {
-        const resp = await fetch(`https://viacep.com.br/ws/${digitos}/json/`)
-        const dados = await resp.json()
-        if (cancelado) return
-        if (dados.erro) {
-          setCepEncontrado(false)
-        } else {
-          setNovoCliente((prev) => ({
-            ...prev,
-            endereco: dados.logradouro ? dados.logradouro : prev.endereco,
-            bairro: dados.bairro
-              ? `${dados.bairro} - ${dados.localidade}/${dados.uf}`
-              : `${dados.localidade}/${dados.uf}`,
-          }))
-          setCepEncontrado(true)
-
-          // Geocodificacao: tenta achar coordenadas a partir do endereco completo.
-          // Falha silenciosa - se nao achar, o cliente fica sem ponto no mapa,
-          // mas o cadastro continua normal (zona/dia seguem vindo do CEP).
-          try {
-            const enderecoBusca = encodeURIComponent(
-              `${dados.logradouro || ''}, ${dados.bairro || ''}, ${dados.localidade}, ${dados.uf}, Brasil`
-            )
-            const geoResp = await fetch(
-              `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${enderecoBusca}`
-            )
-            const geoDados = await geoResp.json()
-            if (!cancelado && Array.isArray(geoDados) && geoDados.length > 0) {
-              setNovoCliente((prev) => ({
-                ...prev,
-                latitude: parseFloat(geoDados[0].lat),
-                longitude: parseFloat(geoDados[0].lon),
-              }))
-            }
-          } catch {
-            // sem coordenadas - tudo bem, segue o fluxo
-          }
-        }
-      } catch {
-        if (!cancelado) setCepEncontrado(false)
-      } finally {
-        if (!cancelado) setBuscandoCep(false)
+      const r = await buscarEnderecoEGeo(digitos)
+      if (cancelado) return
+      if (!r.encontrado) {
+        setCepEncontrado(false)
+      } else {
+        setNovoCliente((prev) => ({
+          ...prev,
+          endereco: r.endereco || prev.endereco,
+          bairro: r.bairro || prev.bairro,
+          latitude: r.latitude,
+          longitude: r.longitude,
+        }))
+        setCepEncontrado(true)
       }
+      if (!cancelado) setBuscandoCep(false)
     }, 400)
 
     return () => { cancelado = true; clearTimeout(timer) }
@@ -512,6 +580,92 @@ export default function AdminVisitas() {
   }, [visitas])
 
   function statusDoCliente(id) { return ultimaVisitaPorCliente[id]?.status || 'Pendente' }
+
+  async function processarImportacao(file) {
+    setImportando(true)
+    setResumoImport(null)
+    setProgressoImport([])
+    setErro('')
+    try {
+      const buffer = await file.arrayBuffer()
+      const registros = lerPlanilhaClientes(buffer)
+      if (registros.length === 0) {
+        setErro('Não encontrei nenhuma linha válida na planilha — confira se há uma coluna de Nome/Cliente e uma de CEP preenchidas.')
+        return
+      }
+
+      const cnpjsExistentes = new Set(
+        clientes.map((c) => (c.cnpj || '').replace(/\D/g, '')).filter(Boolean)
+      )
+
+      let ok = 0
+      let erros = 0
+      let pulados = 0
+      const lista = []
+
+      for (const reg of registros) {
+        const cnpjDigitos = reg.cnpj.replace(/\D/g, '')
+        if (cnpjDigitos && cnpjsExistentes.has(cnpjDigitos)) {
+          pulados++
+          lista.push({ nome: reg.nome, status: 'pulado', mensagem: 'CNPJ já está na sua carteira' })
+          setProgressoImport([...lista])
+          continue
+        }
+
+        let endereco = reg.endereco
+        let bairro = reg.bairro
+        let latitude = null
+        let longitude = null
+
+        const cepDigitos = reg.cep.replace(/\D/g, '')
+        if (cepDigitos.length === 8) {
+          const r = await buscarEnderecoEGeo(cepDigitos)
+          if (r.encontrado) {
+            endereco = endereco || r.endereco
+            bairro = bairro || r.bairro
+            latitude = r.latitude
+            longitude = r.longitude
+          }
+        }
+
+        try {
+          const { error } = await supabase.from('carteira_clientes').insert([{
+            nome: reg.nome,
+            cnpj: reg.cnpj,
+            cep: reg.cep,
+            endereco,
+            bairro,
+            situacao: 'Ativo',
+            latitude,
+            longitude,
+            vendedor_id: vendedor.id,
+          }])
+          if (error) throw error
+          ok++
+          if (cnpjDigitos) cnpjsExistentes.add(cnpjDigitos)
+          lista.push({
+            nome: reg.nome, status: 'ok',
+            mensagem: latitude ? 'Cadastrado, com localização no mapa' : 'Cadastrado (sem localização — confira o CEP depois)',
+          })
+        } catch (err) {
+          erros++
+          lista.push({ nome: reg.nome, status: 'erro', mensagem: err.message })
+        }
+        setProgressoImport([...lista])
+
+        // Respeita o limite do servico gratuito de geolocalizacao (1 busca por segundo)
+        await new Promise((r) => setTimeout(r, 1100))
+      }
+
+      setResumoImport({ total: registros.length, ok, erros, pulados })
+      await carregarTudo()
+    } catch (err) {
+      setErro('Não consegui ler essa planilha: ' + err.message)
+    } finally {
+      setImportando(false)
+      if (inputArquivoRef.current) inputArquivoRef.current.value = ''
+    }
+  }
 
   async function salvarNovoCliente(e) {
     e.preventDefault()
@@ -923,6 +1077,57 @@ export default function AdminVisitas() {
 
         {!carregando && aba === 'clientes' && (
           <>
+            <Painel style={{ marginBottom: 20 }}>
+              <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
+                Importar planilha
+              </div>
+              <p style={{ fontSize: 12.5, color: COR.textSecondary, marginTop: 0, marginBottom: 14 }}>
+                Aceita .xlsx ou .xls. A planilha precisa de uma coluna de nome do cliente e uma de CEP
+                (os nomes das colunas podem variar — ex: "Cliente" ou "Nome", "Cep" ou "CEP"). Colunas de
+                CNPJ, Endereço e Bairro são opcionais.
+              </p>
+              <input
+                ref={inputArquivoRef}
+                type="file"
+                accept=".xlsx,.xls"
+                disabled={importando}
+                onChange={(e) => { if (e.target.files?.[0]) processarImportacao(e.target.files[0]) }}
+                style={{ fontSize: 13 }}
+              />
+
+              {importando && (
+                <p style={{ fontSize: 12.5, color: COR.amberDeep, marginTop: 12 }}>
+                  Importando… isso demora cerca de 1 segundo por cliente (respeitando o limite do serviço
+                  de busca de endereço). Não feche esta aba.
+                </p>
+              )}
+
+              {progressoImport.length > 0 && (
+                <div className="av-scroll" style={{ maxHeight: 220, overflowY: 'auto', marginTop: 14, border: `1px solid ${COR.lineSoft}`, borderRadius: 4 }}>
+                  {progressoImport.map((p, i) => {
+                    const cor = p.status === 'ok' ? '#3F6B4D' : p.status === 'pulado' ? '#B6862F' : '#8C3F4F'
+                    return (
+                      <div key={i} style={{
+                        display: 'flex', justifyContent: 'space-between', gap: 10, padding: '7px 10px',
+                        borderBottom: i < progressoImport.length - 1 ? `1px solid ${COR.lineSoft}` : 'none',
+                        fontSize: 12.5,
+                      }}>
+                        <span style={{ fontWeight: 600 }}>{p.nome || '(sem nome)'}</span>
+                        <span style={{ color: cor, fontWeight: 600, whiteSpace: 'nowrap' }}>{p.mensagem}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {resumoImport && (
+                <p style={{ fontSize: 13, fontWeight: 600, marginTop: 14, marginBottom: 0 }}>
+                  {resumoImport.ok} cadastrados · {resumoImport.pulados} já existiam · {resumoImport.erros} com erro
+                  {' '}(de {resumoImport.total} linhas na planilha).
+                </p>
+              )}
+            </Painel>
+
             <Painel style={{ marginBottom: 20 }}>
               <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
                 Cadastrar cliente
