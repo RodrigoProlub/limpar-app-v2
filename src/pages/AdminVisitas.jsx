@@ -319,6 +319,13 @@ function MapaDia({ pontos, cor }) {
   return <div ref={ref} style={{ height: 230, borderRadius: 6, border: `1px solid ${COR.line}` }} />
 }
 
+// Detecta o dia da semana de hoje (no formato usado pelo resto do app).
+// Sábado e domingo não têm rota cadastrada (retorna null).
+function diaSemanaHoje() {
+  const mapa = { 1: 'SEGUNDA', 2: 'TERÇA', 3: 'QUARTA', 4: 'QUINTA', 5: 'SEXTA' }
+  return mapa[new Date().getDay()] || null
+}
+
 export default function AdminVisitas() {
   const [vendedor, setVendedor] = useState(null) // { id, nome, usuario, admin } | null
   const [usuarioDigitado, setUsuarioDigitado] = useState('')
@@ -327,7 +334,7 @@ export default function AdminVisitas() {
   const [entrando, setEntrando] = useState(false)
   const autenticado = !!vendedor
 
-  const [aba, setAba] = useState('roteiro')
+  const [aba, setAba] = useState('hoje')
   const [clientes, setClientes] = useState([])
   const [visitas, setVisitas] = useState([])
   const [carregando, setCarregando] = useState(false)
@@ -351,7 +358,7 @@ export default function AdminVisitas() {
   const [novoVendedor, setNovoVendedor] = useState({ nome: '', usuario: '', senha: '', admin: false })
   const [salvandoVendedor, setSalvandoVendedor] = useState(false)
   const [mostrarInativos, setMostrarInativos] = useState(false)
-  const [diaComMapaAberto, setDiaComMapaAberto] = useState(null)
+  const [diaComMapaAberto, setDiaComMapaAberto] = useState(diaSemanaHoje())
 
   useEffect(() => {
     if (vendedor) carregarTudo()
@@ -607,6 +614,89 @@ export default function AdminVisitas() {
 
   function nomeCliente(id) { return clientes.find((c) => c.id === id)?.nome || '(cliente removido)' }
 
+  function renderDiaCard(d, { comBorda = true } = {}) {
+    const lc = LINHA_DIA[d]
+    const lista = clientesPorDia.map[d]
+    const comCoord = lista.filter((c) => c.latitude && c.longitude)
+    const ordenados = ordenarPorProximidade(comCoord, CASA_BASE)
+    const linkRota = linkGoogleMaps(ordenados)
+    const mapaAberto = diaComMapaAberto === d
+    const semCoord = lista.filter((c) => !(c.latitude && c.longitude))
+    const listaExibicao = [...ordenados, ...semCoord]
+
+    return (
+      <div key={d} style={{ padding: '0 16px', borderLeft: comBorda ? `1px solid ${COR.line}` : 'none' }}>
+        <div style={{ marginBottom: 12 }}>
+          <div className="av-display" style={{ fontSize: 15, fontWeight: 700, color: COR.textPrimary }}>
+            {d}
+          </div>
+          <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 2 }}>
+            {lista.length} {lista.length === 1 ? 'parada' : 'paradas'}
+            {comCoord.length > 0 && comCoord.length < lista.length && <> · {comCoord.length} no mapa</>}
+          </div>
+          <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+            <button
+              onClick={() => setDiaComMapaAberto(mapaAberto ? null : d)}
+              style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: 11.5, fontWeight: 600, color: COR.amberDeep }}
+            >
+              {mapaAberto ? 'ocultar mapa' : 'ver mapa do dia'}
+            </button>
+            {linkRota && (
+              <a href={linkRota} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, fontWeight: 600, color: COR.amberDeep, textDecoration: 'none' }}>
+                abrir rota no Google Maps →
+              </a>
+            )}
+          </div>
+        </div>
+
+        {mapaAberto && (
+          <div style={{ marginBottom: 16 }}>
+            <MapaDia pontos={ordenados} cor={lc.cor} />
+          </div>
+        )}
+
+        <div style={{ position: 'relative' }}>
+          {lista.length > 0 && (
+            <div style={{ position: 'absolute', left: 4, top: 6, bottom: 6, width: 2, background: lc.cor, opacity: 0.35, borderRadius: 1 }} />
+          )}
+          {listaExibicao.map((c) => {
+            const st = STATUS_INFO[statusDoCliente(c.id)]
+            return (
+              <div key={c.id} style={{ position: 'relative', paddingLeft: 22, paddingBottom: 18 }}>
+                <div style={{ position: 'absolute', left: 0, top: 4, width: 10, height: 10, borderRadius: '50%', background: COR.paper, border: `2px solid ${lc.cor}` }} />
+                <div style={{ fontSize: 13.5, fontWeight: 600, color: COR.textPrimary, lineHeight: 1.3 }}>{c.nome}</div>
+                <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 2 }}>{c.bairro}</div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                  <Etiqueta texto={c.status_rodizio} info={RODIZIO_INFO} />
+                  <span style={{ width: 1, height: 10, background: COR.line }} />
+                  <span style={{ fontSize: 11, fontWeight: 600, color: st.cor, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{st.label}</span>
+                  {(c.situacao || 'Ativo') !== 'Ativo' && (
+                    <>
+                      <span style={{ width: 1, height: 10, background: COR.line }} />
+                      <Etiqueta texto={c.situacao} info={SITUACAO_INFO} />
+                    </>
+                  )}
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 7 }}>
+                  <button onClick={() => abrirModalVisita(c)} style={{ border: 'none', background: 'none', padding: 0, color: COR.amberDeep, fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
+                    Registrar visita →
+                  </button>
+                  <span style={{ width: 1, height: 10, background: COR.line }} />
+                  <span style={{ fontSize: 11.5, color: COR.textSecondary }}>
+                    mover p/ <SeletorDia cliente={c} onChange={alterarDia} />
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+          {lista.length === 0 && (
+            <p style={{ color: COR.textSecondary, fontSize: 12.5, paddingLeft: 4 }}>Sem paradas.</p>
+          )}
+        </div>
+      </div>
+    )
+  }
+
   async function carregarVendedores() {
     setCarregandoVendedores(true)
     try {
@@ -709,6 +799,7 @@ export default function AdminVisitas() {
   }
 
   const abas = [
+    ['hoje', 'Roteiro do Dia'],
     ['roteiro', 'Roteiro semanal'],
     ['clientes', 'Clientes'],
     ['historico', 'Histórico'],
@@ -770,6 +861,30 @@ export default function AdminVisitas() {
         )}
         {carregando && <p style={{ color: COR.textSecondary }}>Carregando carteira…</p>}
 
+        {!carregando && aba === 'hoje' && (() => {
+          const diaHoje = diaSemanaHoje()
+          if (!diaHoje) {
+            return (
+              <Painel>
+                <p style={{ margin: 0, color: COR.textSecondary, fontSize: 14 }}>
+                  Hoje é fim de semana — sem rota cadastrada. Use a aba <strong>Roteiro semanal</strong> para ver os outros dias.
+                </p>
+              </Painel>
+            )
+          }
+          return (
+            <div style={{ maxWidth: 460 }}>
+              <div style={{
+                display: 'inline-block', marginBottom: 4, fontSize: 11, fontWeight: 700,
+                letterSpacing: '0.06em', color: COR.amberDeep, textTransform: 'uppercase',
+              }}>
+                Roteiro do Dia
+              </div>
+              {renderDiaCard(diaHoje, { comBorda: false })}
+            </div>
+          )
+        })()}
+
         {!carregando && aba === 'roteiro' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
@@ -786,117 +901,7 @@ export default function AdminVisitas() {
               </Painel>
             )}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 0 }}>
-              {DIAS.map((d, idx) => {
-                const lc = LINHA_DIA[d]
-                const lista = clientesPorDia.map[d]
-                const comCoord = lista.filter((c) => c.latitude && c.longitude)
-                const ordenados = ordenarPorProximidade(comCoord, CASA_BASE)
-                const linkRota = linkGoogleMaps(ordenados)
-                const mapaAberto = diaComMapaAberto === d
-                return (
-                  <div key={d} style={{
-                    padding: '0 16px',
-                    borderLeft: idx === 0 ? 'none' : `1px solid ${COR.line}`,
-                  }}>
-                    <div style={{ marginBottom: 12 }}>
-                      <div className="av-display" style={{ fontSize: 15, fontWeight: 700, color: COR.textPrimary }}>
-                        {d}
-                      </div>
-                      <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 2 }}>
-                        {lista.length} {lista.length === 1 ? 'parada' : 'paradas'}
-                        {comCoord.length > 0 && comCoord.length < lista.length && (
-                          <> · {comCoord.length} no mapa</>
-                        )}
-                      </div>
-                      <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                        <button
-                          onClick={() => setDiaComMapaAberto(mapaAberto ? null : d)}
-                          style={{
-                            border: 'none', background: 'none', padding: 0, cursor: 'pointer',
-                            fontSize: 11.5, fontWeight: 600, color: COR.amberDeep,
-                          }}
-                        >
-                          {mapaAberto ? 'ocultar mapa' : 'ver mapa do dia'}
-                        </button>
-                        {linkRota && (
-                          <a href={linkRota} target="_blank" rel="noreferrer" style={{
-                            fontSize: 11.5, fontWeight: 600, color: COR.amberDeep, textDecoration: 'none',
-                          }}>
-                            abrir rota no Google Maps →
-                          </a>
-                        )}
-                      </div>
-                    </div>
-
-                    {mapaAberto && (
-                      <div style={{ marginBottom: 16 }}>
-                        <MapaDia pontos={ordenados} cor={lc.cor} />
-                      </div>
-                    )}
-
-                    <div style={{ position: 'relative' }}>
-                      {lista.length > 0 && (
-                        <div style={{
-                          position: 'absolute', left: 4, top: 6, bottom: 6, width: 2,
-                          background: lc.cor, opacity: 0.35, borderRadius: 1,
-                        }} />
-                      )}
-                      {(() => {
-                        const semCoord = lista.filter((c) => !(c.latitude && c.longitude))
-                        const listaExibicao = [...ordenados, ...semCoord]
-                        return listaExibicao.map((c) => {
-                        const st = STATUS_INFO[statusDoCliente(c.id)]
-                        return (
-                          <div key={c.id} style={{ position: 'relative', paddingLeft: 22, paddingBottom: 18 }}>
-                            <div style={{
-                              position: 'absolute', left: 0, top: 4, width: 10, height: 10, borderRadius: '50%',
-                              background: COR.paper, border: `2px solid ${lc.cor}`,
-                            }} />
-                            <div style={{ fontSize: 13.5, fontWeight: 600, color: COR.textPrimary, lineHeight: 1.3 }}>
-                              {c.nome}
-                            </div>
-                            <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 2 }}>
-                              {c.bairro}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                              <Etiqueta texto={c.status_rodizio} info={RODIZIO_INFO} />
-                              <span style={{ width: 1, height: 10, background: COR.line }} />
-                              <span style={{ fontSize: 11, fontWeight: 600, color: st.cor, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                                {st.label}
-                              </span>
-                              {(c.situacao || 'Ativo') !== 'Ativo' && (
-                                <>
-                                  <span style={{ width: 1, height: 10, background: COR.line }} />
-                                  <Etiqueta texto={c.situacao} info={SITUACAO_INFO} />
-                                </>
-                              )}
-                            </div>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 7 }}>
-                              <button
-                                onClick={() => abrirModalVisita(c)}
-                                style={{
-                                  border: 'none', background: 'none', padding: 0,
-                                  color: COR.amberDeep, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
-                                }}
-                              >
-                                Registrar visita →
-                              </button>
-                              <span style={{ width: 1, height: 10, background: COR.line }} />
-                              <span style={{ fontSize: 11.5, color: COR.textSecondary }}>
-                                mover p/ <SeletorDia cliente={c} onChange={alterarDia} />
-                              </span>
-                            </div>
-                          </div>
-                        )
-                      })
-                      })()}
-                      {lista.length === 0 && (
-                        <p style={{ color: COR.textSecondary, fontSize: 12.5, paddingLeft: 4 }}>Sem paradas.</p>
-                      )}
-                    </div>
-                  </div>
-                )
-              })}
+              {DIAS.map((d, idx) => renderDiaCard(d, { comBorda: idx !== 0 }))}
             </div>
 
             {clientesPorDia.outros.length > 0 && (
