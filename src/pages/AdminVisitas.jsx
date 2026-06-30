@@ -158,6 +158,24 @@ function Campo({ label, ...props }) {
   )
 }
 
+const DIAS_OPCOES = ['SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'Verificar manualmente']
+
+function SeletorDia({ cliente, onChange }) {
+  const cor = LINHA_DIA[cliente.dia_sugerido]?.cor || COR.textSecondary
+  return (
+    <select
+      value={cliente.dia_sugerido || 'Verificar manualmente'}
+      onChange={(e) => onChange(cliente.id, e.target.value)}
+      style={{
+        border: 'none', background: 'transparent', fontSize: 12, fontWeight: 700,
+        color: cor, cursor: 'pointer', padding: 0,
+      }}
+    >
+      {DIAS_OPCOES.map((d) => <option key={d} value={d}>{d}</option>)}
+    </select>
+  )
+}
+
 function SeletorSituacao({ cliente, onChange }) {
   const info = SITUACAO_INFO[cliente.situacao] || SITUACAO_INFO.Ativo
   return (
@@ -189,6 +207,8 @@ export default function AdminVisitas() {
   const [erro, setErro] = useState('')
 
   const [novoCliente, setNovoCliente] = useState({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo' })
+  const [modoDia, setModoDia] = useState('auto') // 'auto' | 'manual'
+  const [diaManual, setDiaManual] = useState('SEGUNDA')
   const [salvandoCliente, setSalvandoCliente] = useState(false)
 
   const [modalVisita, setModalVisita] = useState(null)
@@ -249,12 +269,33 @@ export default function AdminVisitas() {
     if (!novoCliente.nome || !novoCliente.cep) { setErro('Informe ao menos o nome e o CEP.'); return }
     setSalvandoCliente(true); setErro('')
     try {
-      const { error } = await supabase.from('carteira_clientes').insert([novoCliente])
+      const { data: inserido, error } = await supabase.from('carteira_clientes').insert([novoCliente]).select().single()
       if (error) throw error
+      // o cadastro sempre calcula o dia pelo CEP primeiro; se o usuario escolheu
+      // encaixar manualmente, sobrescrevemos o dia logo em seguida
+      if (modoDia === 'manual' && inserido) {
+        const { error: e2 } = await supabase.from('carteira_clientes').update({ dia_sugerido: diaManual }).eq('id', inserido.id)
+        if (e2) throw e2
+      }
       setNovoCliente({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo' })
+      setModoDia('auto')
+      setDiaManual('SEGUNDA')
       await carregarTudo()
     } catch (err) { setErro('Não consegui salvar o cliente: ' + err.message) }
     finally { setSalvandoCliente(false) }
+  }
+
+  async function alterarDia(clienteId, novoDia) {
+    // atualiza so o dia_sugerido (nunca o cep), entao o gatilho automatico por CEP nao
+    // sobrescreve essa escolha manual
+    setClientes((prev) => prev.map((c) => c.id === clienteId ? { ...c, dia_sugerido: novoDia } : c))
+    try {
+      const { error } = await supabase.from('carteira_clientes').update({ dia_sugerido: novoDia }).eq('id', clienteId)
+      if (error) throw error
+    } catch (err) {
+      setErro('Não consegui salvar o dia: ' + err.message)
+      await carregarTudo()
+    }
   }
 
   async function alterarSituacao(clienteId, novaSituacao) {
@@ -482,15 +523,21 @@ export default function AdminVisitas() {
                                 </>
                               )}
                             </div>
-                            <button
-                              onClick={() => abrirModalVisita(c)}
-                              style={{
-                                marginTop: 7, border: 'none', background: 'none', padding: 0,
-                                color: COR.amberDeep, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
-                              }}
-                            >
-                              Registrar visita →
-                            </button>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 7 }}>
+                              <button
+                                onClick={() => abrirModalVisita(c)}
+                                style={{
+                                  border: 'none', background: 'none', padding: 0,
+                                  color: COR.amberDeep, fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+                                }}
+                              >
+                                Registrar visita →
+                              </button>
+                              <span style={{ width: 1, height: 10, background: COR.line }} />
+                              <span style={{ fontSize: 11.5, color: COR.textSecondary }}>
+                                mover p/ <SeletorDia cliente={c} onChange={alterarDia} />
+                              </span>
+                            </div>
                           </div>
                         )
                       })}
@@ -551,6 +598,39 @@ export default function AdminVisitas() {
                     </select>
                   </label>
                 </div>
+
+                <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${COR.lineSoft}` }}>
+                  <span style={{ display: 'block', marginBottom: 8, color: COR.textSecondary, fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase', fontSize: 10.5 }}>
+                    Encaixe na rota
+                  </span>
+                  <div style={{ display: 'flex', gap: 18, flexWrap: 'wrap', alignItems: 'center' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, cursor: 'pointer' }}>
+                      <input type="radio" name="modoDia" checked={modoDia === 'auto'}
+                        onChange={() => setModoDia('auto')} />
+                      Automático pelo CEP
+                    </label>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 13, cursor: 'pointer' }}>
+                      <input type="radio" name="modoDia" checked={modoDia === 'manual'}
+                        onChange={() => setModoDia('manual')} />
+                      Escolher o dia
+                    </label>
+                    {modoDia === 'manual' && (
+                      <select
+                        value={diaManual}
+                        onChange={(e) => setDiaManual(e.target.value)}
+                        style={{ padding: '8px 11px', borderRadius: 4, border: `1px solid ${COR.line}`, fontSize: 13.5, background: COR.paper }}
+                      >
+                        {DIAS.map((d) => <option key={d} value={d}>{d}</option>)}
+                      </select>
+                    )}
+                  </div>
+                  {modoDia === 'manual' && (
+                    <p style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 8, marginBottom: 0 }}>
+                      A zona e o status do rodízio ainda são calculados pelo CEP — só o dia da semana fica fixo no que você escolher.
+                    </p>
+                  )}
+                </div>
+
                 <Botao type="submit" variant="amber" disabled={salvandoCliente} style={{ marginTop: 16 }}>
                   {salvandoCliente ? 'Salvando…' : 'Salvar cliente'}
                 </Botao>
@@ -579,7 +659,7 @@ export default function AdminVisitas() {
                         <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{c.nome}</td>
                         <td className="av-mono" style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{c.cep}</td>
                         <td style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{c.bairro}</td>
-                        <td style={{ padding: '10px 10px 10px 0' }}>{c.dia_sugerido}</td>
+                        <td style={{ padding: '10px 10px 10px 0' }}><SeletorDia cliente={c} onChange={alterarDia} /></td>
                         <td style={{ padding: '10px 10px 10px 0' }}><Etiqueta texto={c.status_rodizio} info={RODIZIO_INFO} /></td>
                         <td style={{ padding: '10px 10px 10px 0' }}>
                           <SeletorSituacao cliente={c} onChange={alterarSituacao} />
