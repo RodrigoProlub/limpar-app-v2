@@ -207,6 +207,8 @@ export default function AdminVisitas() {
   const [erro, setErro] = useState('')
 
   const [novoCliente, setNovoCliente] = useState({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo' })
+  const [buscandoCep, setBuscandoCep] = useState(false)
+  const [cepEncontrado, setCepEncontrado] = useState(null) // null | true | false
   const [modoDia, setModoDia] = useState('auto') // 'auto' | 'manual'
   const [diaManual, setDiaManual] = useState('SEGUNDA')
   const [salvandoCliente, setSalvandoCliente] = useState(false)
@@ -221,6 +223,43 @@ export default function AdminVisitas() {
   useEffect(() => {
     if (autenticado) carregarTudo()
   }, [autenticado])
+
+  // Busca automática de rua/bairro via ViaCEP, assim que o CEP tiver 8 dígitos.
+  // Debounce de 400ms para não disparar uma busca a cada tecla.
+  useEffect(() => {
+    const digitos = (novoCliente.cep || '').replace(/\D/g, '')
+    if (digitos.length !== 8) { setCepEncontrado(null); return }
+
+    let cancelado = false
+    const timer = setTimeout(async () => {
+      setBuscandoCep(true)
+      setCepEncontrado(null)
+      try {
+        const resp = await fetch(`https://viacep.com.br/ws/${digitos}/json/`)
+        const dados = await resp.json()
+        if (cancelado) return
+        if (dados.erro) {
+          setCepEncontrado(false)
+        } else {
+          setNovoCliente((prev) => ({
+            ...prev,
+            endereco: dados.logradouro ? dados.logradouro : prev.endereco,
+            bairro: dados.bairro
+              ? `${dados.bairro} - ${dados.localidade}/${dados.uf}`
+              : `${dados.localidade}/${dados.uf}`,
+          }))
+          setCepEncontrado(true)
+        }
+      } catch {
+        if (!cancelado) setCepEncontrado(false)
+      } finally {
+        if (!cancelado) setBuscandoCep(false)
+      }
+    }, 400)
+
+    return () => { cancelado = true; clearTimeout(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [novoCliente.cep])
 
   async function carregarTudo() {
     setCarregando(true)
@@ -280,6 +319,7 @@ export default function AdminVisitas() {
       setNovoCliente({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo' })
       setModoDia('auto')
       setDiaManual('SEGUNDA')
+      setCepEncontrado(null)
       await carregarTudo()
     } catch (err) { setErro('Não consegui salvar o cliente: ' + err.message) }
     finally { setSalvandoCliente(false) }
@@ -579,8 +619,15 @@ export default function AdminVisitas() {
                     onChange={(e) => setNovoCliente({ ...novoCliente, nome: e.target.value })} />
                   <Campo label="CNPJ" value={novoCliente.cnpj}
                     onChange={(e) => setNovoCliente({ ...novoCliente, cnpj: e.target.value })} />
-                  <Campo label="CEP *" placeholder="00000-000" value={novoCliente.cep}
-                    onChange={(e) => setNovoCliente({ ...novoCliente, cep: e.target.value })} />
+                  <div style={{ position: 'relative' }}>
+                    <Campo label="CEP *" placeholder="00000-000" value={novoCliente.cep}
+                      onChange={(e) => setNovoCliente({ ...novoCliente, cep: e.target.value })} />
+                    {buscandoCep && (
+                      <span style={{ position: 'absolute', right: 10, bottom: 10, fontSize: 11, color: COR.textSecondary }}>
+                        buscando…
+                      </span>
+                    )}
+                  </div>
                   <Campo label="Endereço" value={novoCliente.endereco}
                     onChange={(e) => setNovoCliente({ ...novoCliente, endereco: e.target.value })} />
                   <Campo label="Bairro" value={novoCliente.bairro}
@@ -598,6 +645,12 @@ export default function AdminVisitas() {
                     </select>
                   </label>
                 </div>
+
+                {cepEncontrado === false && (
+                  <p style={{ fontSize: 11.5, color: '#B6862F', marginTop: 8, marginBottom: 0 }}>
+                    CEP não encontrado — preencha o endereço e o bairro manualmente.
+                  </p>
+                )}
 
                 <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${COR.lineSoft}` }}>
                   <span style={{ display: 'block', marginBottom: 8, color: COR.textSecondary, fontWeight: 600, letterSpacing: '0.03em', textTransform: 'uppercase', fontSize: 10.5 }}>
