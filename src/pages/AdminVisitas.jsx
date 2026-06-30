@@ -202,7 +202,9 @@ function SeletorSituacao({ cliente, onChange }) {
 
 // Ponto de partida aproximado (Taboão da Serra). Usado só pra ordenar a
 // rota do dia e montar o link do Google Maps — não precisa ser exato.
-const CASA_BASE = { lat: -23.6229, lng: -46.7817 }
+// Ponto de partida usado só se o vendedor ainda não cadastrou o próprio
+// endereço residencial no "Meu Perfil" (fallback, região de Taboão da Serra).
+const CASA_BASE_PADRAO = { lat: -23.6229, lng: -46.7817 }
 
 function distanciaKm(a, b) {
   const R = 6371
@@ -236,9 +238,9 @@ function ordenarPorProximidade(clientesComCoord, origem) {
   return ordenado
 }
 
-function linkGoogleMaps(pontosOrdenados) {
+function linkGoogleMaps(pontosOrdenados, origemCasa) {
   if (pontosOrdenados.length === 0) return null
-  const origin = `${CASA_BASE.lat},${CASA_BASE.lng}`
+  const origin = `${origemCasa.lat},${origemCasa.lng}`
   const ultimo = pontosOrdenados[pontosOrdenados.length - 1]
   const destination = `${ultimo.latitude},${ultimo.longitude}`
   const waypoints = pontosOrdenados.slice(0, -1).map((p) => `${p.latitude},${p.longitude}`).join('|')
@@ -325,6 +327,22 @@ function MapaDia({ pontos, cor }) {
 function diaSemanaHoje() {
   const mapa = { 1: 'SEGUNDA', 2: 'TERÇA', 3: 'QUARTA', 4: 'QUINTA', 5: 'SEXTA' }
   return mapa[new Date().getDay()] || null
+}
+
+// Regra oficial do rodízio em São Paulo: o dia de restrição depende do
+// último número da placa (funciona com placa antiga ou Mercosul).
+function diaRodizioPorPlaca(placa) {
+  const digitos = String(placa || '').replace(/\D/g, '')
+  if (!digitos) return null
+  const ultimo = digitos[digitos.length - 1]
+  const mapa = {
+    '1': 'SEGUNDA', '2': 'SEGUNDA',
+    '3': 'TERÇA', '4': 'TERÇA',
+    '5': 'QUARTA', '6': 'QUARTA',
+    '7': 'QUINTA', '8': 'QUINTA',
+    '9': 'SEXTA', '0': 'SEXTA',
+  }
+  return mapa[ultimo] || null
 }
 
 // =====================================================================
@@ -450,6 +468,15 @@ export default function AdminVisitas() {
   const [filtroMes, setFiltroMes] = useState('')
 
   const [listaVendedores, setListaVendedores] = useState([])
+
+  const [perfilForm, setPerfilForm] = useState({
+    cep_residencial: '', endereco_residencial: '', bairro_residencial: '',
+    latitude_residencial: null, longitude_residencial: null, placa: '',
+  })
+  const [buscandoCepPerfil, setBuscandoCepPerfil] = useState(false)
+  const [cepPerfilEncontrado, setCepPerfilEncontrado] = useState(null)
+  const [salvandoPerfil, setSalvandoPerfil] = useState(false)
+  const [perfilSalvo, setPerfilSalvo] = useState(false)
   const [carregandoVendedores, setCarregandoVendedores] = useState(false)
   const [novoVendedor, setNovoVendedor] = useState({ nome: '', usuario: '', senha: '', admin: false })
   const [salvandoVendedor, setSalvandoVendedor] = useState(false)
@@ -458,6 +485,20 @@ export default function AdminVisitas() {
 
   useEffect(() => {
     if (vendedor) carregarTudo()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendedor?.id])
+
+  useEffect(() => {
+    if (vendedor) {
+      setPerfilForm({
+        cep_residencial: vendedor.cep_residencial || '',
+        endereco_residencial: vendedor.endereco_residencial || '',
+        bairro_residencial: vendedor.bairro_residencial || '',
+        latitude_residencial: vendedor.latitude_residencial || null,
+        longitude_residencial: vendedor.longitude_residencial || null,
+        placa: vendedor.placa || '',
+      })
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [vendedor?.id])
 
@@ -498,6 +539,36 @@ export default function AdminVisitas() {
     return () => { cancelado = true; clearTimeout(timer) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [novoCliente.cep])
+
+  // Mesma busca automática de endereço, agora para o CEP residencial do perfil.
+  useEffect(() => {
+    const digitos = (perfilForm.cep_residencial || '').replace(/\D/g, '')
+    if (digitos.length !== 8) { setCepPerfilEncontrado(null); return }
+
+    let cancelado = false
+    const timer = setTimeout(async () => {
+      setBuscandoCepPerfil(true)
+      setCepPerfilEncontrado(null)
+      const r = await buscarEnderecoEGeo(digitos)
+      if (cancelado) return
+      if (!r.encontrado) {
+        setCepPerfilEncontrado(false)
+      } else {
+        setPerfilForm((prev) => ({
+          ...prev,
+          endereco_residencial: r.endereco || prev.endereco_residencial,
+          bairro_residencial: r.bairro || prev.bairro_residencial,
+          latitude_residencial: r.latitude,
+          longitude_residencial: r.longitude,
+        }))
+        setCepPerfilEncontrado(true)
+      }
+      if (!cancelado) setBuscandoCepPerfil(false)
+    }, 400)
+
+    return () => { cancelado = true; clearTimeout(timer) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [perfilForm.cep_residencial])
 
   async function carregarTudo() {
     if (!vendedor) return
@@ -706,6 +777,28 @@ export default function AdminVisitas() {
     }
   }
 
+  async function salvarPerfil(e) {
+    e.preventDefault()
+    setSalvandoPerfil(true)
+    setErro('')
+    setPerfilSalvo(false)
+    try {
+      const { data, error } = await supabase
+        .from('carteira_vendedores')
+        .update(perfilForm)
+        .eq('id', vendedor.id)
+        .select()
+        .single()
+      if (error) throw error
+      setVendedor(data)
+      setPerfilSalvo(true)
+    } catch (err) {
+      setErro('Não consegui salvar seu perfil: ' + err.message)
+    } finally {
+      setSalvandoPerfil(false)
+    }
+  }
+
   async function alterarSituacao(clienteId, novaSituacao) {
     // atualiza a tela na hora (otimista) e confirma no banco em seguida
     setClientes((prev) => prev.map((c) => c.id === clienteId ? { ...c, situacao: novaSituacao } : c))
@@ -772,8 +865,11 @@ export default function AdminVisitas() {
     const lc = LINHA_DIA[d]
     const lista = clientesPorDia.map[d]
     const comCoord = lista.filter((c) => c.latitude && c.longitude)
-    const ordenados = ordenarPorProximidade(comCoord, CASA_BASE)
-    const linkRota = linkGoogleMaps(ordenados)
+    const casaBase = (vendedor?.latitude_residencial && vendedor?.longitude_residencial)
+      ? { lat: vendedor.latitude_residencial, lng: vendedor.longitude_residencial }
+      : CASA_BASE_PADRAO
+    const ordenados = ordenarPorProximidade(comCoord, casaBase)
+    const linkRota = linkGoogleMaps(ordenados, casaBase)
     const mapaAberto = diaComMapaAberto === d
     const semCoord = lista.filter((c) => !(c.latitude && c.longitude))
     const listaExibicao = [...ordenados, ...semCoord]
@@ -958,6 +1054,7 @@ export default function AdminVisitas() {
     ['clientes', 'Clientes'],
     ['historico', 'Histórico'],
     ['painel', 'Painel'],
+    ['perfil', 'Meu Perfil'],
     ...(vendedor?.admin ? [['vendedores', 'Vendedores']] : []),
   ]
 
@@ -1348,6 +1445,74 @@ export default function AdminVisitas() {
           </>
         )}
 
+        {aba === 'perfil' && (
+          <Painel style={{ maxWidth: 480 }}>
+            <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
+              Meu Perfil
+            </div>
+            <p style={{ fontSize: 12.5, color: COR.textSecondary, marginTop: 0, marginBottom: 16 }}>
+              Seu endereço residencial é usado como ponto de partida nas rotas e no mapa.
+              A placa define automaticamente o seu dia de rodízio em São Paulo.
+            </p>
+
+            <form onSubmit={salvarPerfil}>
+              <div style={{ position: 'relative', marginBottom: 12 }}>
+                <Campo label="CEP residencial" placeholder="00000-000"
+                  value={perfilForm.cep_residencial}
+                  onChange={(e) => setPerfilForm({ ...perfilForm, cep_residencial: e.target.value })} />
+                {buscandoCepPerfil && (
+                  <span style={{ position: 'absolute', right: 10, bottom: 10, fontSize: 11, color: COR.textSecondary }}>
+                    buscando…
+                  </span>
+                )}
+              </div>
+
+              {cepPerfilEncontrado === false && (
+                <p style={{ fontSize: 11.5, color: '#B6862F', marginTop: -6, marginBottom: 12 }}>
+                  CEP não encontrado — preencha o endereço manualmente.
+                </p>
+              )}
+              {cepPerfilEncontrado === true && (
+                <p style={{ fontSize: 11.5, color: perfilForm.latitude_residencial ? '#3F6B4D' : '#B6862F', marginTop: -6, marginBottom: 12 }}>
+                  {perfilForm.latitude_residencial
+                    ? '📍 Endereço e localização encontrados.'
+                    : 'Endereço encontrado, mas sem localização exata no mapa.'}
+                </p>
+              )}
+
+              <div style={{ marginBottom: 12 }}>
+                <Campo label="Endereço" value={perfilForm.endereco_residencial}
+                  onChange={(e) => setPerfilForm({ ...perfilForm, endereco_residencial: e.target.value })} />
+              </div>
+              <div style={{ marginBottom: 12 }}>
+                <Campo label="Bairro" value={perfilForm.bairro_residencial}
+                  onChange={(e) => setPerfilForm({ ...perfilForm, bairro_residencial: e.target.value })} />
+              </div>
+              <div style={{ marginBottom: 6 }}>
+                <Campo label="Placa do veículo" placeholder="ABC1D23" value={perfilForm.placa}
+                  onChange={(e) => setPerfilForm({ ...perfilForm, placa: e.target.value })} />
+              </div>
+
+              {perfilForm.placa && (
+                <p style={{ fontSize: 13, fontWeight: 600, color: COR.amberDeep, marginTop: 6, marginBottom: 16 }}>
+                  {diaRodizioPorPlaca(perfilForm.placa)
+                    ? `Seu dia de rodízio: ${diaRodizioPorPlaca(perfilForm.placa)}`
+                    : 'Não consegui identificar o dia pelo final dessa placa — confira se digitou certo.'}
+                </p>
+              )}
+
+              <Botao type="submit" variant="amber" disabled={salvandoPerfil}>
+                {salvandoPerfil ? 'Salvando…' : 'Salvar meus dados'}
+              </Botao>
+              {perfilSalvo && (
+                <span style={{ marginLeft: 12, fontSize: 12.5, color: '#3F6B4D', fontWeight: 600 }}>
+                  Salvo!
+                </span>
+              )}
+            </form>
+          </Painel>
+        )}
+
         {aba === 'vendedores' && vendedor?.admin && (
           <>
             <Painel style={{ marginBottom: 20 }}>
@@ -1382,7 +1547,7 @@ export default function AdminVisitas() {
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
                 <thead>
                   <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
-                    {['Nome', 'Usuário', 'Admin', 'Status', ''].map((h) => (
+                    {['Nome', 'Usuário', 'Placa', 'Dia de Rodízio', 'Admin', 'Status', ''].map((h) => (
                       <th key={h} style={{
                         padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700,
                         color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -1395,6 +1560,8 @@ export default function AdminVisitas() {
                     <tr key={v.id} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
                       <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{v.nome}</td>
                       <td className="av-mono" style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{v.usuario}</td>
+                      <td className="av-mono" style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{v.placa || '—'}</td>
+                      <td style={{ padding: '10px 10px 10px 0' }}>{diaRodizioPorPlaca(v.placa) || '—'}</td>
                       <td style={{ padding: '10px 10px 10px 0' }}>{v.admin ? 'Sim' : '—'}</td>
                       <td style={{ padding: '10px 10px 10px 0' }}>
                         <span style={{ fontSize: 11, fontWeight: 700, color: v.ativo ? '#3F6B4D' : '#8A8377', textTransform: 'uppercase' }}>
