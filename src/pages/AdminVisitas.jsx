@@ -1085,14 +1085,14 @@ export default function AdminVisitas() {
           </div>
         </div>
 
-        <nav style={{ display: 'flex', gap: 4, marginTop: 22 }}>
+        <nav style={{ display: 'flex', flexWrap: 'wrap', rowGap: 4, columnGap: 18, marginTop: 18 }}>
           {abas.map(([key, label]) => (
             <button
               key={key}
               onClick={() => setAba(key)}
               style={{
                 background: 'transparent', border: 'none', cursor: 'pointer',
-                padding: '10px 4px', marginRight: 22,
+                padding: '8px 2px', whiteSpace: 'nowrap',
                 fontSize: 13.5, fontWeight: 600,
                 color: aba === key ? COR.textOnInk : COR.textOnInkSoft,
                 borderBottom: aba === key ? `2px solid ${COR.amber}` : '2px solid transparent',
