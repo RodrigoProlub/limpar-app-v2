@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { supabase } from '../supabaseClient'
 
 // =====================================================================
@@ -195,6 +195,130 @@ function SeletorSituacao({ cliente, onChange }) {
   )
 }
 
+// =====================================================================
+// GEOLOCALIZAÇÃO — ordenação por proximidade e mapa visual (Leaflet/OSM)
+// =====================================================================
+
+// Ponto de partida aproximado (Taboão da Serra). Usado só pra ordenar a
+// rota do dia e montar o link do Google Maps — não precisa ser exato.
+const CASA_BASE = { lat: -23.6229, lng: -46.7817 }
+
+function distanciaKm(a, b) {
+  const R = 6371
+  const dLat = (b.lat - a.lat) * Math.PI / 180
+  const dLng = (b.lng - a.lng) * Math.PI / 180
+  const lat1 = (a.lat * Math.PI) / 180
+  const lat2 = (b.lat * Math.PI) / 180
+  const h = Math.sin(dLat / 2) ** 2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2
+  return 2 * R * Math.asin(Math.sqrt(h))
+}
+
+// Algoritmo do "vizinho mais próximo": sempre vai para o cliente mais perto
+// de onde "está" no momento, começando de casa. Não é matematicamente
+// perfeito (problema do caixeiro-viajante não tem solução simples), mas dá
+// uma rota bem melhor que a ordem alfabética ou de cadastro.
+function ordenarPorProximidade(clientesComCoord, origem) {
+  const restantes = [...clientesComCoord]
+  const ordenado = []
+  let atual = origem
+  while (restantes.length > 0) {
+    let melhorIdx = 0
+    let melhorDist = Infinity
+    restantes.forEach((c, i) => {
+      const d = distanciaKm(atual, { lat: c.latitude, lng: c.longitude })
+      if (d < melhorDist) { melhorDist = d; melhorIdx = i }
+    })
+    const [proximo] = restantes.splice(melhorIdx, 1)
+    ordenado.push(proximo)
+    atual = { lat: proximo.latitude, lng: proximo.longitude }
+  }
+  return ordenado
+}
+
+function linkGoogleMaps(pontosOrdenados) {
+  if (pontosOrdenados.length === 0) return null
+  const origin = `${CASA_BASE.lat},${CASA_BASE.lng}`
+  const ultimo = pontosOrdenados[pontosOrdenados.length - 1]
+  const destination = `${ultimo.latitude},${ultimo.longitude}`
+  const waypoints = pontosOrdenados.slice(0, -1).map((p) => `${p.latitude},${p.longitude}`).join('|')
+  let url = `https://www.google.com/maps/dir/?api=1&origin=${origin}&destination=${destination}&travelmode=driving`
+  if (waypoints) url += `&waypoints=${encodeURIComponent(waypoints)}`
+  return url
+}
+
+// Carrega o Leaflet (biblioteca de mapas open-source, gratuita) via CDN só
+// quando algum mapa precisa ser exibido — não pesa o carregamento inicial.
+function useLeaflet() {
+  const [pronto, setPronto] = useState(typeof window !== 'undefined' && !!window.L)
+  useEffect(() => {
+    if (typeof window === 'undefined' || window.L) { setPronto(true); return }
+    if (!document.getElementById('leaflet-css')) {
+      const link = document.createElement('link')
+      link.id = 'leaflet-css'
+      link.rel = 'stylesheet'
+      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css'
+      document.head.appendChild(link)
+    }
+    if (document.getElementById('leaflet-js')) {
+      const check = setInterval(() => {
+        if (window.L) { setPronto(true); clearInterval(check) }
+      }, 200)
+      return () => clearInterval(check)
+    }
+    const script = document.createElement('script')
+    script.id = 'leaflet-js'
+    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+    script.onload = () => setPronto(true)
+    document.body.appendChild(script)
+  }, [])
+  return pronto
+}
+
+function MapaDia({ pontos, cor }) {
+  const ref = useRef(null)
+  const mapRef = useRef(null)
+  const leafletPronto = useLeaflet()
+
+  useEffect(() => {
+    if (!leafletPronto || !ref.current || pontos.length === 0) return
+    try {
+      if (!mapRef.current) {
+        mapRef.current = window.L.map(ref.current)
+      }
+      const map = mapRef.current
+      map.eachLayer((layer) => map.removeLayer(layer))
+      window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '&copy; OpenStreetMap',
+        maxZoom: 19,
+      }).addTo(map)
+
+      const latlngs = pontos.map((p) => [p.latitude, p.longitude])
+      pontos.forEach((p, i) => {
+        window.L.marker([p.latitude, p.longitude])
+          .addTo(map)
+          .bindTooltip(`${i + 1}. ${p.nome}`)
+      })
+      if (latlngs.length > 1) {
+        window.L.polyline(latlngs, { color: cor, weight: 3, opacity: 0.6 }).addTo(map)
+      }
+      map.fitBounds(latlngs, { padding: [28, 28] })
+      setTimeout(() => map.invalidateSize(), 150)
+    } catch {
+      // se o mapa falhar por algum motivo, a tela continua funcionando normalmente
+    }
+  }, [leafletPronto, pontos, cor])
+
+  if (pontos.length === 0) {
+    return (
+      <p style={{ color: COR.textSecondary, fontSize: 12.5, padding: '8px 0' }}>
+        Nenhum cliente com localização cadastrada neste dia ainda.
+      </p>
+    )
+  }
+
+  return <div ref={ref} style={{ height: 230, borderRadius: 6, border: `1px solid ${COR.line}` }} />
+}
+
 export default function AdminVisitas() {
   const [vendedor, setVendedor] = useState(null) // { id, nome, usuario, admin } | null
   const [usuarioDigitado, setUsuarioDigitado] = useState('')
@@ -209,7 +333,7 @@ export default function AdminVisitas() {
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
 
-  const [novoCliente, setNovoCliente] = useState({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo' })
+  const [novoCliente, setNovoCliente] = useState({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo', latitude: null, longitude: null })
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [cepEncontrado, setCepEncontrado] = useState(null) // null | true | false
   const [modoDia, setModoDia] = useState('auto') // 'auto' | 'manual'
@@ -227,6 +351,7 @@ export default function AdminVisitas() {
   const [novoVendedor, setNovoVendedor] = useState({ nome: '', usuario: '', senha: '', admin: false })
   const [salvandoVendedor, setSalvandoVendedor] = useState(false)
   const [mostrarInativos, setMostrarInativos] = useState(false)
+  const [diaComMapaAberto, setDiaComMapaAberto] = useState(null)
 
   useEffect(() => {
     if (vendedor) carregarTudo()
@@ -239,6 +364,8 @@ export default function AdminVisitas() {
   }, [aba])
 
   // Busca automática de rua/bairro via ViaCEP, assim que o CEP tiver 8 dígitos.
+  // Em seguida, geocodifica o endereço (Nominatim/OpenStreetMap, gratuito) para
+  // obter latitude/longitude — usadas no mapa e na ordenação por proximidade.
   // Debounce de 400ms para não disparar uma busca a cada tecla.
   useEffect(() => {
     const digitos = (novoCliente.cep || '').replace(/\D/g, '')
@@ -263,6 +390,28 @@ export default function AdminVisitas() {
               : `${dados.localidade}/${dados.uf}`,
           }))
           setCepEncontrado(true)
+
+          // Geocodificacao: tenta achar coordenadas a partir do endereco completo.
+          // Falha silenciosa - se nao achar, o cliente fica sem ponto no mapa,
+          // mas o cadastro continua normal (zona/dia seguem vindo do CEP).
+          try {
+            const enderecoBusca = encodeURIComponent(
+              `${dados.logradouro || ''}, ${dados.bairro || ''}, ${dados.localidade}, ${dados.uf}, Brasil`
+            )
+            const geoResp = await fetch(
+              `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${enderecoBusca}`
+            )
+            const geoDados = await geoResp.json()
+            if (!cancelado && Array.isArray(geoDados) && geoDados.length > 0) {
+              setNovoCliente((prev) => ({
+                ...prev,
+                latitude: parseFloat(geoDados[0].lat),
+                longitude: parseFloat(geoDados[0].lon),
+              }))
+            }
+          } catch {
+            // sem coordenadas - tudo bem, segue o fluxo
+          }
         }
       } catch {
         if (!cancelado) setCepEncontrado(false)
@@ -374,7 +523,7 @@ export default function AdminVisitas() {
         const { error: e2 } = await supabase.from('carteira_clientes').update({ dia_sugerido: diaManual }).eq('id', inserido.id)
         if (e2) throw e2
       }
-      setNovoCliente({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo' })
+      setNovoCliente({ nome: '', cnpj: '', cep: '', endereco: '', bairro: '', situacao: 'Ativo', latitude: null, longitude: null })
       setModoDia('auto')
       setDiaManual('SEGUNDA')
       setCepEncontrado(null)
@@ -640,19 +789,50 @@ export default function AdminVisitas() {
               {DIAS.map((d, idx) => {
                 const lc = LINHA_DIA[d]
                 const lista = clientesPorDia.map[d]
+                const comCoord = lista.filter((c) => c.latitude && c.longitude)
+                const ordenados = ordenarPorProximidade(comCoord, CASA_BASE)
+                const linkRota = linkGoogleMaps(ordenados)
+                const mapaAberto = diaComMapaAberto === d
                 return (
                   <div key={d} style={{
                     padding: '0 16px',
                     borderLeft: idx === 0 ? 'none' : `1px solid ${COR.line}`,
                   }}>
-                    <div style={{ marginBottom: 16 }}>
+                    <div style={{ marginBottom: 12 }}>
                       <div className="av-display" style={{ fontSize: 15, fontWeight: 700, color: COR.textPrimary }}>
                         {d}
                       </div>
                       <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 2 }}>
                         {lista.length} {lista.length === 1 ? 'parada' : 'paradas'}
+                        {comCoord.length > 0 && comCoord.length < lista.length && (
+                          <> · {comCoord.length} no mapa</>
+                        )}
+                      </div>
+                      <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                        <button
+                          onClick={() => setDiaComMapaAberto(mapaAberto ? null : d)}
+                          style={{
+                            border: 'none', background: 'none', padding: 0, cursor: 'pointer',
+                            fontSize: 11.5, fontWeight: 600, color: COR.amberDeep,
+                          }}
+                        >
+                          {mapaAberto ? 'ocultar mapa' : 'ver mapa do dia'}
+                        </button>
+                        {linkRota && (
+                          <a href={linkRota} target="_blank" rel="noreferrer" style={{
+                            fontSize: 11.5, fontWeight: 600, color: COR.amberDeep, textDecoration: 'none',
+                          }}>
+                            abrir rota no Google Maps →
+                          </a>
+                        )}
                       </div>
                     </div>
+
+                    {mapaAberto && (
+                      <div style={{ marginBottom: 16 }}>
+                        <MapaDia pontos={ordenados} cor={lc.cor} />
+                      </div>
+                    )}
 
                     <div style={{ position: 'relative' }}>
                       {lista.length > 0 && (
@@ -661,7 +841,10 @@ export default function AdminVisitas() {
                           background: lc.cor, opacity: 0.35, borderRadius: 1,
                         }} />
                       )}
-                      {lista.map((c) => {
+                      {(() => {
+                        const semCoord = lista.filter((c) => !(c.latitude && c.longitude))
+                        const listaExibicao = [...ordenados, ...semCoord]
+                        return listaExibicao.map((c) => {
                         const st = STATUS_INFO[statusDoCliente(c.id)]
                         return (
                           <div key={c.id} style={{ position: 'relative', paddingLeft: 22, paddingBottom: 18 }}>
@@ -705,7 +888,8 @@ export default function AdminVisitas() {
                             </div>
                           </div>
                         )
-                      })}
+                      })
+                      })()}
                       {lista.length === 0 && (
                         <p style={{ color: COR.textSecondary, fontSize: 12.5, paddingLeft: 4 }}>Sem paradas.</p>
                       )}
@@ -774,6 +958,13 @@ export default function AdminVisitas() {
                 {cepEncontrado === false && (
                   <p style={{ fontSize: 11.5, color: '#B6862F', marginTop: 8, marginBottom: 0 }}>
                     CEP não encontrado — preencha o endereço e o bairro manualmente.
+                  </p>
+                )}
+                {cepEncontrado === true && (
+                  <p style={{ fontSize: 11.5, color: novoCliente.latitude ? '#3F6B4D' : '#B6862F', marginTop: 8, marginBottom: 0 }}>
+                    {novoCliente.latitude
+                      ? '📍 Endereço e localização encontrados — vai aparecer no mapa.'
+                      : 'Endereço encontrado, mas não consegui localizar no mapa — o cliente ainda entra no roteiro normalmente, só não aparece no mapa visual.'}
                   </p>
                 )}
 
