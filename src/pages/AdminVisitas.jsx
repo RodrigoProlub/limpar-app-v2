@@ -7,7 +7,7 @@ import { supabase } from '../supabaseClient'
 // cliente e uma parada. Paleta grafite + papel + ambar de sinalizacao.
 // =====================================================================
 
-const SENHA_ADMIN = 'limpar2026'
+// A senha unica fixa deu lugar ao login por vendedor (tabela carteira_vendedores)
 
 const COR = {
   ink: '#14181F',
@@ -196,9 +196,12 @@ function SeletorSituacao({ cliente, onChange }) {
 }
 
 export default function AdminVisitas() {
-  const [autenticado, setAutenticado] = useState(false)
+  const [vendedor, setVendedor] = useState(null) // { id, nome, usuario, admin } | null
+  const [usuarioDigitado, setUsuarioDigitado] = useState('')
   const [senhaDigitada, setSenhaDigitada] = useState('')
   const [erroSenha, setErroSenha] = useState('')
+  const [entrando, setEntrando] = useState(false)
+  const autenticado = !!vendedor
 
   const [aba, setAba] = useState('roteiro')
   const [clientes, setClientes] = useState([])
@@ -218,11 +221,22 @@ export default function AdminVisitas() {
   const [salvandoVisita, setSalvandoVisita] = useState(false)
 
   const [filtroMes, setFiltroMes] = useState('')
+
+  const [listaVendedores, setListaVendedores] = useState([])
+  const [carregandoVendedores, setCarregandoVendedores] = useState(false)
+  const [novoVendedor, setNovoVendedor] = useState({ nome: '', usuario: '', senha: '', admin: false })
+  const [salvandoVendedor, setSalvandoVendedor] = useState(false)
   const [mostrarInativos, setMostrarInativos] = useState(false)
 
   useEffect(() => {
-    if (autenticado) carregarTudo()
-  }, [autenticado])
+    if (vendedor) carregarTudo()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [vendedor?.id])
+
+  useEffect(() => {
+    if (aba === 'vendedores' && vendedor?.admin) carregarVendedores()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aba])
 
   // Busca automática de rua/bairro via ViaCEP, assim que o CEP tiver 8 dígitos.
   // Debounce de 400ms para não disparar uma busca a cada tecla.
@@ -262,31 +276,71 @@ export default function AdminVisitas() {
   }, [novoCliente.cep])
 
   async function carregarTudo() {
+    if (!vendedor) return
     setCarregando(true)
     setErro('')
     try {
-      const [{ data: cli, error: e1 }, { data: vis, error: e2 }] = await Promise.all([
-        supabase.from('carteira_clientes').select('*').order('nome'),
-        supabase.from('carteira_visitas').select('*').order('data_visita', { ascending: false }),
-      ])
+      const { data: cli, error: e1 } = await supabase
+        .from('carteira_clientes')
+        .select('*')
+        .eq('vendedor_id', vendedor.id)
+        .order('nome')
       if (e1) throw e1
-      if (e2) throw e2
+
+      const idsCliente = (cli || []).map((c) => c.id)
+      let vis = []
+      if (idsCliente.length > 0) {
+        const { data: visData, error: e2 } = await supabase
+          .from('carteira_visitas')
+          .select('*')
+          .in('cliente_id', idsCliente)
+          .order('data_visita', { ascending: false })
+        if (e2) throw e2
+        vis = visData || []
+      }
+
       setClientes(cli || [])
-      setVisitas(vis || [])
+      setVisitas(vis)
     } catch (err) {
       setErro(
         'Não consegui carregar os dados (' + err.message + '). Se a tabela existe mas continua vazia ' +
         'aqui, o motivo mais comum é o RLS bloqueando a leitura — no SQL Editor do Supabase, rode: ' +
-        '"ALTER TABLE carteira_clientes DISABLE ROW LEVEL SECURITY;" (e o mesmo para carteira_visitas e carteira_regras_cep).'
+        '"ALTER TABLE carteira_clientes DISABLE ROW LEVEL SECURITY;" (e o mesmo para carteira_visitas, carteira_regras_cep e carteira_vendedores).'
       )
     } finally {
       setCarregando(false)
     }
   }
 
-  function entrar() {
-    if (senhaDigitada === SENHA_ADMIN) { setAutenticado(true); setErroSenha('') }
-    else setErroSenha('Senha incorreta.')
+  async function entrar() {
+    if (!usuarioDigitado || !senhaDigitada) { setErroSenha('Informe usuário e senha.'); return }
+    setEntrando(true)
+    setErroSenha('')
+    try {
+      const { data, error } = await supabase
+        .from('carteira_vendedores')
+        .select('*')
+        .ilike('usuario', usuarioDigitado.trim())
+        .eq('senha', senhaDigitada)
+        .eq('ativo', true)
+        .maybeSingle()
+      if (error) throw error
+      if (!data) { setErroSenha('Usuário ou senha incorretos.'); return }
+      setVendedor(data)
+    } catch (err) {
+      setErroSenha('Não consegui validar o login: ' + err.message)
+    } finally {
+      setEntrando(false)
+    }
+  }
+
+  function sair() {
+    setVendedor(null)
+    setUsuarioDigitado('')
+    setSenhaDigitada('')
+    setClientes([])
+    setVisitas([])
+    setAba('roteiro')
   }
 
   const ultimaVisitaPorCliente = useMemo(() => {
@@ -308,7 +362,11 @@ export default function AdminVisitas() {
     if (!novoCliente.nome || !novoCliente.cep) { setErro('Informe ao menos o nome e o CEP.'); return }
     setSalvandoCliente(true); setErro('')
     try {
-      const { data: inserido, error } = await supabase.from('carteira_clientes').insert([novoCliente]).select().single()
+      const { data: inserido, error } = await supabase
+        .from('carteira_clientes')
+        .insert([{ ...novoCliente, vendedor_id: vendedor.id }])
+        .select()
+        .single()
       if (error) throw error
       // o cadastro sempre calcula o dia pelo CEP primeiro; se o usuario escolheu
       // encaixar manualmente, sobrescrevemos o dia logo em seguida
@@ -400,6 +458,58 @@ export default function AdminVisitas() {
 
   function nomeCliente(id) { return clientes.find((c) => c.id === id)?.nome || '(cliente removido)' }
 
+  async function carregarVendedores() {
+    setCarregandoVendedores(true)
+    try {
+      const { data, error } = await supabase.from('carteira_vendedores').select('*').order('nome')
+      if (error) throw error
+      setListaVendedores(data || [])
+    } catch (err) {
+      setErro('Não consegui carregar os vendedores: ' + err.message)
+    } finally {
+      setCarregandoVendedores(false)
+    }
+  }
+
+  async function salvarNovoVendedor(e) {
+    e.preventDefault()
+    if (!novoVendedor.nome || !novoVendedor.usuario || !novoVendedor.senha) {
+      setErro('Preencha nome, usuário e senha do novo vendedor.')
+      return
+    }
+    setSalvandoVendedor(true); setErro('')
+    try {
+      const { error } = await supabase.from('carteira_vendedores').insert([{
+        nome: novoVendedor.nome,
+        usuario: novoVendedor.usuario.trim().toLowerCase(),
+        senha: novoVendedor.senha,
+        admin: novoVendedor.admin,
+      }])
+      if (error) throw error
+      setNovoVendedor({ nome: '', usuario: '', senha: '', admin: false })
+      await carregarVendedores()
+    } catch (err) {
+      if ((err.message || '').includes('duplicate') || (err.message || '').includes('unique')) {
+        setErro('Já existe um vendedor com esse usuário — escolha outro nome de usuário.')
+      } else {
+        setErro('Não consegui criar o vendedor: ' + err.message)
+      }
+    } finally {
+      setSalvandoVendedor(false)
+    }
+  }
+
+  async function alternarAtivoVendedor(id, ativoAtual) {
+    setListaVendedores((prev) => prev.map((v) => v.id === id ? { ...v, ativo: !ativoAtual } : v))
+    try {
+      const { error } = await supabase.from('carteira_vendedores').update({ ativo: !ativoAtual }).eq('id', id)
+      if (error) throw error
+    } catch (err) {
+      setErro('Não consegui atualizar o vendedor: ' + err.message)
+      await carregarVendedores()
+    }
+  }
+
   const totalVisitado = clientes.filter((c) => statusDoCliente(c.id) === 'Visitado').length
   const totalPendente = clientes.filter((c) => statusDoCliente(c.id) === 'Pendente').length
 
@@ -422,18 +532,25 @@ export default function AdminVisitas() {
             </div>
             <Painel style={{ background: COR.paperRaised }}>
               <Campo
-                label="Senha de acesso"
+                label="Usuário"
+                value={usuarioDigitado}
+                onChange={(e) => setUsuarioDigitado(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && entrar()}
+                autoFocus
+                style={{ marginBottom: 12 }}
+              />
+              <Campo
+                label="Senha"
                 type="password"
                 value={senhaDigitada}
                 onChange={(e) => setSenhaDigitada(e.target.value)}
                 onKeyDown={(e) => e.key === 'Enter' && entrar()}
-                autoFocus
               />
               {erroSenha && (
                 <p style={{ color: '#8C3F4F', fontSize: 12.5, marginTop: 8, marginBottom: 0 }}>{erroSenha}</p>
               )}
-              <Botao variant="amber" onClick={entrar} style={{ width: '100%', marginTop: 16 }}>
-                Entrar
+              <Botao variant="amber" onClick={entrar} disabled={entrando} style={{ width: '100%', marginTop: 16 }}>
+                {entrando ? 'Entrando…' : 'Entrar'}
               </Botao>
             </Painel>
           </div>
@@ -447,6 +564,7 @@ export default function AdminVisitas() {
     ['clientes', 'Clientes'],
     ['historico', 'Histórico'],
     ['painel', 'Painel'],
+    ...(vendedor?.admin ? [['vendedores', 'Vendedores']] : []),
   ]
 
   return (
@@ -464,6 +582,13 @@ export default function AdminVisitas() {
             </div>
           </div>
           <div className="av-mono" style={{ color: COR.textOnInkSoft, fontSize: 12, textAlign: 'right' }}>
+            <div style={{ color: COR.textOnInk, fontWeight: 700, marginBottom: 4 }}>
+              {vendedor?.nome}
+              <button onClick={sair} style={{
+                marginLeft: 12, border: 'none', background: 'none', color: COR.amber,
+                fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
+              }}>sair</button>
+            </div>
             <div>{totalVisitado} visitados · {totalPendente} pendentes</div>
             <div>{clientes.length} clientes na carteira</div>
           </div>
@@ -818,6 +943,83 @@ export default function AdminVisitas() {
                   </div>
                 )
               })}
+            </Painel>
+          </>
+        )}
+
+        {aba === 'vendedores' && vendedor?.admin && (
+          <>
+            <Painel style={{ marginBottom: 20 }}>
+              <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
+                Adicionar vendedor
+              </div>
+              <form onSubmit={salvarNovoVendedor}>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: 12 }}>
+                  <Campo label="Nome *" value={novoVendedor.nome}
+                    onChange={(e) => setNovoVendedor({ ...novoVendedor, nome: e.target.value })} />
+                  <Campo label="Usuário (login) *" value={novoVendedor.usuario}
+                    onChange={(e) => setNovoVendedor({ ...novoVendedor, usuario: e.target.value })} />
+                  <Campo label="Senha *" value={novoVendedor.senha}
+                    onChange={(e) => setNovoVendedor({ ...novoVendedor, senha: e.target.value })} />
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, paddingTop: 18 }}>
+                    <input type="checkbox" checked={novoVendedor.admin}
+                      onChange={(e) => setNovoVendedor({ ...novoVendedor, admin: e.target.checked })} />
+                    Também é administrador
+                  </label>
+                </div>
+                <Botao type="submit" variant="amber" disabled={salvandoVendedor} style={{ marginTop: 16 }}>
+                  {salvandoVendedor ? 'Salvando…' : 'Salvar vendedor'}
+                </Botao>
+              </form>
+            </Painel>
+
+            <Painel>
+              <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
+                Equipe ({listaVendedores.length})
+              </div>
+              {carregandoVendedores && <p style={{ color: COR.textSecondary }}>Carregando…</p>}
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
+                    {['Nome', 'Usuário', 'Admin', 'Status', ''].map((h) => (
+                      <th key={h} style={{
+                        padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700,
+                        color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase',
+                      }}>{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {listaVendedores.map((v) => (
+                    <tr key={v.id} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
+                      <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{v.nome}</td>
+                      <td className="av-mono" style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{v.usuario}</td>
+                      <td style={{ padding: '10px 10px 10px 0' }}>{v.admin ? 'Sim' : '—'}</td>
+                      <td style={{ padding: '10px 10px 10px 0' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: v.ativo ? '#3F6B4D' : '#8A8377', textTransform: 'uppercase' }}>
+                          {v.ativo ? 'Ativo' : 'Inativo'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 0' }}>
+                        {v.id !== vendedor.id && (
+                          <button onClick={() => alternarAtivoVendedor(v.id, v.ativo)} style={{
+                            border: 'none', background: 'none', color: COR.amberDeep,
+                            cursor: 'pointer', fontSize: 12, fontWeight: 600,
+                          }}>
+                            {v.ativo ? 'desativar' : 'reativar'}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {listaVendedores.length === 0 && !carregandoVendedores && (
+                <p style={{ color: COR.textSecondary, fontSize: 13, padding: '12px 0' }}>Nenhum vendedor cadastrado ainda.</p>
+              )}
+              <p style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 14 }}>
+                Desativar um vendedor impede o login dele, mas não apaga a carteira de clientes já cadastrada.
+              </p>
             </Painel>
           </>
         )}
