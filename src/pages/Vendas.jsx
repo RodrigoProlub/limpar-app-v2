@@ -27,10 +27,10 @@ export default function Vendas({ vendas, vendedores, onNovaVenda, onEditVenda, o
 
   // meses disponíveis (todos que têm venda)
   const mesesDisponiveis = useMemo(() => {
-    const set = new Set()
+    const set = new Set([mesAtual]) // sempre inclui o mês atual
     vendas.forEach(v => { if (v.data) set.add(v.data.slice(0, 7)) })
     return [...set].sort((a, b) => b.localeCompare(a))
-  }, [vendas])
+  }, [vendas, mesAtual])
 
   const filtered = useMemo(() => {
     return vendas.filter(v => {
