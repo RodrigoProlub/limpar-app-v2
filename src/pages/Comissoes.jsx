@@ -20,15 +20,23 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
   const [fechando, setFechando] = useState(false)
 
   const mesAtual = new Date().toISOString().slice(0, 7)
+  const [mesSelecionado, setMesSelecionado] = useState(mesAtual)
+
+  // gera lista de meses disponíveis: meses que têm vendas + mês atual
+  const mesesDisponiveis = useMemo(() => {
+    const set = new Set([mesAtual])
+    vendas.forEach(v => { if (v.data) set.add(v.data.slice(0, 7)) })
+    return [...set].sort((a, b) => b.localeCompare(a))
+  }, [vendas, mesAtual])
 
   const resumoMes = useMemo(() => {
     return vendedores.map(v => {
       const comissaoFixa = (comissoes.find(c => c.vendedor === v.nome) || {}).valor || 0
-      const qtd = vendas.filter(x => x.vendedor === v.nome && x.data.startsWith(mesAtual) && x.status === 'Concluído').length
-      const jaFechado = fechamentos.some(f => f.vendedor === v.nome && f.mes === mesAtual)
+      const qtd = vendas.filter(x => x.vendedor === v.nome && x.data.startsWith(mesSelecionado) && x.status === 'Concluído').length
+      const jaFechado = fechamentos.some(f => f.vendedor === v.nome && f.mes === mesSelecionado)
       return { nome: v.nome, qtd, comissaoFixa, total: qtd * comissaoFixa, jaFechado }
     }).filter(r => r.qtd > 0 || r.jaFechado)
-  }, [vendedores, vendas, comissoes, fechamentos, mesAtual])
+  }, [vendedores, vendas, comissoes, fechamentos, mesSelecionado])
 
   const pendentes = resumoMes.filter(r => !r.jaFechado && r.qtd > 0)
 
@@ -36,14 +44,14 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
     if (pendentes.length === 0) { notify('Nada pendente para fechar este mês.', 'warning'); setConfirmFechar(false); return }
     setFechando(true)
     const rows = pendentes.map(r => ({
-      cliente_id: clienteId, vendedor: r.nome, mes: mesAtual,
+      cliente_id: clienteId, vendedor: r.nome, mes: mesSelecionado,
       qtd_tmo: r.qtd, valor_unitario: r.comissaoFixa, total: r.total,
     }))
     const { error } = await supabase.from('fechamentos_comissao').insert(rows)
     setFechando(false)
     setConfirmFechar(false)
     if (error) notify('Erro ao fechar: ' + error.message, 'error')
-    else { notify('Comissão de ' + mesLabel(mesAtual) + ' fechada!'); onChanged() }
+    else { notify('Comissão de ' + mesLabel(mesSelecionado) + ' fechada!'); onChanged() }
   }
 
   const handleSave = async (form) => {
@@ -77,7 +85,18 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
     <div>
       <div className="card" style={{ marginBottom: '1.5rem' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10, flexWrap: 'wrap', gap: 8 }}>
-          <div style={{ fontWeight: 600 }}>Fechamento de Comissão — {mesLabel(mesAtual)}</div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <div style={{ fontWeight: 600 }}>Fechamento de Comissão</div>
+            <select
+              value={mesSelecionado}
+              onChange={e => setMesSelecionado(e.target.value)}
+              style={{ padding: '6px 10px', borderRadius: 8, border: '1px solid #cbd5e1', fontSize: 13 }}
+            >
+              {mesesDisponiveis.map(m => (
+                <option key={m} value={m}>{mesLabel(m)}{m === mesAtual ? ' (mês atual)' : ''}</option>
+              ))}
+            </select>
+          </div>
           <button className="btn btn-danger" onClick={() => setConfirmFechar(true)} disabled={pendentes.length === 0}>
             <i className="fas fa-lock"></i> Fechar Comissão do Mês
           </button>
@@ -174,7 +193,7 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
 
       {confirmFechar && (
         <ConfirmDialog
-          message={'Fechar a comissão de ' + mesLabel(mesAtual) + '? Isso vai registrar o pagamento de ' + pendentes.length + ' vendedor(es) e não poderá ser desfeito automaticamente.'}
+          message={'Fechar a comissão de ' + mesLabel(mesSelecionado) + '? Isso vai registrar o pagamento de ' + pendentes.length + ' vendedor(es) e não poderá ser desfeito automaticamente.'}
           onCancel={() => setConfirmFechar(false)}
           onConfirm={handleFechar}
         />
