@@ -196,6 +196,9 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
           message={'Fechar a comissão de ' + mesLabel(mesSelecionado) + '? Isso vai registrar o pagamento de ' + pendentes.length + ' vendedor(es) e não poderá ser desfeito automaticamente.'}
           onCancel={() => setConfirmFechar(false)}
           onConfirm={handleFechar}
+          confirmLabel="Fechar Comissão"
+          confirmIcon="fa-lock"
+          danger={false}
         />
       )}
     </div>
