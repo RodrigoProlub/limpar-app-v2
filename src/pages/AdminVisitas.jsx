@@ -919,6 +919,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
   function agregarReposicoes(lista) {
     const porClienteMapa = {}
     const porProdutoMapa = {}
+    const detalhes = []
     for (const r of lista) {
       const visita = visitas.find((v) => v.id === r.visita_id)
       if (!visita) continue
@@ -926,10 +927,18 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
       if (!porClienteMapa[clienteId]) porClienteMapa[clienteId] = { nome: nomeCliente(clienteId), produtos: {} }
       porClienteMapa[clienteId].produtos[r.produto] = (porClienteMapa[clienteId].produtos[r.produto] || 0) + Number(r.quantidade_litros)
       porProdutoMapa[r.produto] = (porProdutoMapa[r.produto] || 0) + Number(r.quantidade_litros)
+      detalhes.push({
+        data: visita.data_visita,
+        nomeCliente: nomeCliente(clienteId),
+        produto: r.produto,
+        litros: Number(r.quantidade_litros),
+      })
     }
+    detalhes.sort((a, b) => (b.data || '').localeCompare(a.data || ''))
     return {
       porCliente: Object.values(porClienteMapa).sort((a, b) => a.nome.localeCompare(b.nome)),
       porProduto: PRODUTOS.map((p) => ({ produto: p, total: porProdutoMapa[p] || 0 })),
+      detalhes,
     }
   }
 
@@ -1546,7 +1555,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
         )}
 
         {!carregando && aba === 'reposicoes' && (() => {
-          const BlocoReposicao = ({ porProduto, porCliente, tituloSufixo }) => (
+          const BlocoReposicao = ({ porProduto, porCliente, detalhes, tituloSufixo }) => (
             <>
               <Painel style={{ marginBottom: 14 }}>
                 <div className="av-display" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>
@@ -1564,7 +1573,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                 </div>
               </Painel>
 
-              <Painel style={{ marginBottom: 24 }}>
+              <Painel style={{ marginBottom: 14 }}>
                 <div className="av-display" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>
                   Total por cliente {tituloSufixo}
                 </div>
@@ -1601,6 +1610,41 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                   </table>
                 )}
               </Painel>
+
+              <Painel style={{ marginBottom: 24 }}>
+                <div className="av-display" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>
+                  Detalhamento por dia {tituloSufixo}
+                </div>
+                {detalhes.length === 0 ? (
+                  <p style={{ color: COR.textSecondary, fontSize: 13, padding: '8px 0' }}>
+                    Nenhuma reposição registrada.
+                  </p>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
+                        {['Data', 'Cliente', 'Produto', 'Litros'].map((h) => (
+                          <th key={h} style={{
+                            padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700,
+                            color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase',
+                            textAlign: h === 'Litros' ? 'right' : 'left',
+                          }}>{h}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {detalhes.map((d, i) => (
+                        <tr key={i} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
+                          <td className="av-mono" style={{ padding: '8px 10px 8px 0', color: COR.textSecondary }}>{d.data}</td>
+                          <td style={{ padding: '8px 10px 8px 0', fontWeight: 600 }}>{d.nomeCliente}</td>
+                          <td style={{ padding: '8px 10px 8px 0', color: COR.textSecondary }}>{d.produto}</td>
+                          <td className="av-mono" style={{ padding: '8px 0', textAlign: 'right', color: COR.amberDeep, fontWeight: 600 }}>{d.litros}L</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </Painel>
             </>
           )
 
@@ -1622,7 +1666,12 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
               </div>
 
               {filtroMes ? (
-                <BlocoReposicao porProduto={reposicaoPorProduto} porCliente={reposicaoPorCliente} tituloSufixo="" />
+                <BlocoReposicao
+                  porProduto={reposicaoAgregada.porProduto}
+                  porCliente={reposicaoAgregada.porCliente}
+                  detalhes={reposicaoAgregada.detalhes}
+                  tituloSufixo=""
+                />
               ) : reposicoesPorMes.length === 0 ? (
                 <Painel>
                   <p style={{ color: COR.textSecondary, fontSize: 13, margin: 0 }}>
@@ -1630,7 +1679,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                   </p>
                 </Painel>
               ) : (
-                reposicoesPorMes.map(({ mes, porProduto, porCliente }) => (
+                reposicoesPorMes.map(({ mes, porProduto, porCliente, detalhes }) => (
                   <div key={mes} style={{ marginBottom: 8 }}>
                     <div style={{
                       fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -1638,7 +1687,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                     }}>
                       {nomeMes(mes)}
                     </div>
-                    <BlocoReposicao porProduto={porProduto} porCliente={porCliente} tituloSufixo="" />
+                    <BlocoReposicao porProduto={porProduto} porCliente={porCliente} detalhes={detalhes} tituloSufixo="" />
                   </div>
                 ))
               )}
