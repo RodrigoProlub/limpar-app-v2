@@ -446,6 +446,7 @@ export default function AdminVisitas() {
   const [aba, setAba] = useState('hoje')
   const [clientes, setClientes] = useState([])
   const [visitas, setVisitas] = useState([])
+  const [reposicoes, setReposicoes] = useState([]) // [{ id, visita_id, produto, quantidade_litros }]
   const [carregando, setCarregando] = useState(false)
   const [erro, setErro] = useState('')
 
@@ -462,7 +463,13 @@ export default function AdminVisitas() {
   const [salvandoCliente, setSalvandoCliente] = useState(false)
 
   const [modalVisita, setModalVisita] = useState(null)
-  const [formVisita, setFormVisita] = useState({ status: 'Visitado', data: '', observacao: '' })
+  const [formVisita, setFormVisita] = useState({
+    status: 'Visitado', data: '', observacao: '',
+    teve_reposicao: false,
+    reposicao: { 'Verniz de Motor': '', 'Limpa Freio': '', 'Sanitizante': '' },
+  })
+
+const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
   const [salvandoVisita, setSalvandoVisita] = useState(false)
 
   const [filtroMes, setFiltroMes] = useState('')
@@ -596,6 +603,18 @@ export default function AdminVisitas() {
 
       setClientes(cli || [])
       setVisitas(vis)
+
+      // Busca reposicoes vinculadas a essas visitas
+      const idsVisita = vis.map((v) => v.id)
+      if (idsVisita.length > 0) {
+        const { data: repData } = await supabase
+          .from('carteira_reposicoes')
+          .select('*')
+          .in('visita_id', idsVisita)
+        setReposicoes(repData || [])
+      } else {
+        setReposicoes([])
+      }
     } catch (err) {
       setErro(
         'Não consegui carregar os dados (' + err.message + '). Se a tabela existe mas continua vazia ' +
@@ -813,7 +832,13 @@ export default function AdminVisitas() {
 
   function abrirModalVisita(cliente) {
     setModalVisita({ clienteId: cliente.id, nome: cliente.nome })
-    setFormVisita({ status: 'Visitado', data: new Date().toISOString().slice(0, 10), observacao: '' })
+    setFormVisita({
+      status: 'Visitado',
+      data: new Date().toISOString().slice(0, 10),
+      observacao: '',
+      teve_reposicao: false,
+      reposicao: { 'Verniz de Motor': '', 'Limpa Freio': '', 'Sanitizante': '' },
+    })
   }
 
   async function salvarVisita(e) {
@@ -821,11 +846,33 @@ export default function AdminVisitas() {
     if (!modalVisita) return
     setSalvandoVisita(true); setErro('')
     try {
-      const { error } = await supabase.from('carteira_visitas').insert([{
-        cliente_id: modalVisita.clienteId, data_visita: formVisita.data,
-        status: formVisita.status, observacao: formVisita.observacao,
-      }])
+      const { data: visita, error } = await supabase
+        .from('carteira_visitas')
+        .insert([{
+          cliente_id: modalVisita.clienteId,
+          data_visita: formVisita.data,
+          status: formVisita.status,
+          observacao: formVisita.observacao,
+        }])
+        .select()
+        .single()
       if (error) throw error
+
+      // Salva reposicoes (so os produtos com quantidade preenchida)
+      if (formVisita.teve_reposicao && visita) {
+        const linhas = PRODUTOS
+          .filter((p) => formVisita.reposicao[p] && parseFloat(formVisita.reposicao[p]) > 0)
+          .map((p) => ({
+            visita_id: visita.id,
+            produto: p,
+            quantidade_litros: parseFloat(formVisita.reposicao[p]),
+          }))
+        if (linhas.length > 0) {
+          const { error: e2 } = await supabase.from('carteira_reposicoes').insert(linhas)
+          if (e2) throw e2
+        }
+      }
+
       setModalVisita(null)
       await carregarTudo()
     } catch (err) { setErro('Não consegui registrar a visita: ' + err.message) }
@@ -1378,7 +1425,7 @@ export default function AdminVisitas() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>
                 <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
-                  {['Data', 'Cliente', 'Status', 'Observação'].map((h) => (
+                  {['Data', 'Cliente', 'Status', 'Observação', 'Reposição'].map((h) => (
                     <th key={h} style={{
                       padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700,
                       color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -1387,16 +1434,32 @@ export default function AdminVisitas() {
                 </tr>
               </thead>
               <tbody>
-                {visitasFiltradas.map((v) => (
-                  <tr key={v.id} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
-                    <td className="av-mono" style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{v.data_visita}</td>
-                    <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{nomeCliente(v.cliente_id)}</td>
-                    <td style={{ padding: '10px 10px 10px 0' }}><Etiqueta texto={v.status} info={STATUS_INFO} /></td>
-                    <td style={{ padding: '10px 0', color: COR.textSecondary }}>{v.observacao}</td>
-                  </tr>
-                ))}
+                {visitasFiltradas.map((v) => {
+                  const reps = reposicoes.filter((r) => r.visita_id === v.id)
+                  return (
+                    <tr key={v.id} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
+                      <td className="av-mono" style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{v.data_visita}</td>
+                      <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{nomeCliente(v.cliente_id)}</td>
+                      <td style={{ padding: '10px 10px 10px 0' }}><Etiqueta texto={v.status} info={STATUS_INFO} /></td>
+                      <td style={{ padding: '10px 10px 10px 0', color: COR.textSecondary }}>{v.observacao}</td>
+                      <td style={{ padding: '10px 0' }}>
+                        {reps.length > 0 ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                            {reps.map((r) => (
+                              <span key={r.id} className="av-mono" style={{ fontSize: 11.5, color: COR.amberDeep }}>
+                                {r.produto}: {r.quantidade_litros}L
+                              </span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span style={{ color: COR.textSecondary, fontSize: 11.5 }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
                 {visitasFiltradas.length === 0 && (
-                  <tr><td colSpan={4} style={{ padding: '16px 0', textAlign: 'center', color: COR.textSecondary }}>
+                  <tr><td colSpan={5} style={{ padding: '16px 0', textAlign: 'center', color: COR.textSecondary }}>
                     Nenhuma visita registrada {filtroMes ? 'neste mês' : 'ainda'}.
                   </td></tr>
                 )}
@@ -1628,6 +1691,48 @@ export default function AdminVisitas() {
                 rows={3}
                 style={{ width: '100%', padding: 9, borderRadius: 4, border: `1px solid ${COR.line}`, marginBottom: 16, fontSize: 14, fontFamily: 'Inter, sans-serif', resize: 'vertical' }}
               />
+
+              {/* Reposição de produto */}
+              <div style={{ borderTop: `1px solid ${COR.lineSoft}`, paddingTop: 14, marginBottom: 16 }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer', marginBottom: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={formVisita.teve_reposicao}
+                    onChange={(e) => setFormVisita({ ...formVisita, teve_reposicao: e.target.checked })}
+                  />
+                  <span style={{ fontSize: 13, fontWeight: 600, color: COR.textPrimary }}>
+                    Teve reposição de produto?
+                  </span>
+                </label>
+
+                {formVisita.teve_reposicao && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {PRODUTOS.map((p) => (
+                      <label key={p} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                        <span style={{ flex: 1, color: COR.textSecondary, fontWeight: 500 }}>{p}</span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.5"
+                            placeholder="0"
+                            value={formVisita.reposicao[p]}
+                            onChange={(e) => setFormVisita({
+                              ...formVisita,
+                              reposicao: { ...formVisita.reposicao, [p]: e.target.value }
+                            })}
+                            style={{
+                              width: 72, padding: '7px 10px', borderRadius: 4,
+                              border: `1px solid ${COR.line}`, fontSize: 14, textAlign: 'right',
+                            }}
+                          />
+                          <span style={{ fontSize: 12, color: COR.textSecondary }}>L</span>
+                        </div>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
 
               <div style={{ display: 'flex', gap: 8 }}>
                 <Botao type="submit" variant="amber" disabled={salvandoVisita}>
