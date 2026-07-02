@@ -908,6 +908,33 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
 
   function nomeCliente(id) { return clientes.find((c) => c.id === id)?.nome || '(cliente removido)' }
 
+  // Reposicoes dentro do periodo filtrado (junta pela visita, que ja tem a data)
+  const reposicoesFiltradas = useMemo(() => {
+    const idsVisitasNoPeriodo = new Set(visitasFiltradas.map((v) => v.id))
+    return reposicoes.filter((r) => idsVisitasNoPeriodo.has(r.visita_id))
+  }, [reposicoes, visitasFiltradas])
+
+  const reposicaoPorCliente = useMemo(() => {
+    const mapa = {} // clienteId -> { nome, produtos: { produto: totalLitros } }
+    for (const r of reposicoesFiltradas) {
+      const visita = visitas.find((v) => v.id === r.visita_id)
+      if (!visita) continue
+      const clienteId = visita.cliente_id
+      if (!mapa[clienteId]) mapa[clienteId] = { nome: nomeCliente(clienteId), produtos: {} }
+      mapa[clienteId].produtos[r.produto] = (mapa[clienteId].produtos[r.produto] || 0) + Number(r.quantidade_litros)
+    }
+    return Object.values(mapa).sort((a, b) => a.nome.localeCompare(b.nome))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reposicoesFiltradas, visitas, clientes])
+
+  const reposicaoPorProduto = useMemo(() => {
+    const mapa = {}
+    for (const r of reposicoesFiltradas) {
+      mapa[r.produto] = (mapa[r.produto] || 0) + Number(r.quantidade_litros)
+    }
+    return PRODUTOS.map((p) => ({ produto: p, total: mapa[p] || 0 }))
+  }, [reposicoesFiltradas])
+
   function renderDiaCard(d, { comBorda = true } = {}) {
     const lc = LINHA_DIA[d]
     const lista = clientesPorDia.map[d]
@@ -983,6 +1010,25 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                     mover p/ <SeletorDia cliente={c} onChange={alterarDia} />
                   </span>
                 </div>
+                {(() => {
+                  const ultima = ultimaVisitaPorCliente[c.id]
+                  if (!ultima) return null
+                  const repsUltima = reposicoes.filter((r) => r.visita_id === ultima.id)
+                  return (
+                    <div style={{
+                      marginTop: 8, padding: '8px 10px', background: COR.lineSoft, borderRadius: 4,
+                      fontSize: 11.5, color: COR.textSecondary,
+                    }}>
+                      <span className="av-mono">{ultima.data_visita}</span>
+                      {ultima.observacao && <> · {ultima.observacao}</>}
+                      {repsUltima.length > 0 && (
+                        <div style={{ marginTop: 4, color: COR.amberDeep, fontWeight: 600 }}>
+                          {repsUltima.map((r) => `${r.produto}: ${r.quantidade_litros}L`).join(' · ')}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
               </div>
             )
           })}
@@ -1100,6 +1146,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
     ['roteiro', 'Roteiro semanal'],
     ['clientes', 'Clientes'],
     ['historico', 'Histórico'],
+    ['reposicoes', 'Reposições'],
     ['painel', 'Painel'],
     ['perfil', 'Meu Perfil'],
     ...(vendedor?.admin ? [['vendedores', 'Vendedores']] : []),
@@ -1466,6 +1513,79 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
               </tbody>
             </table>
           </Painel>
+        )}
+
+        {!carregando && aba === 'reposicoes' && (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
+              <div className="av-display" style={{ fontSize: 15, fontWeight: 700 }}>Reposição de produto</div>
+              <input
+                type="month"
+                value={filtroMes}
+                onChange={(e) => setFiltroMes(e.target.value)}
+                style={{ padding: 8, borderRadius: 4, border: `1px solid ${COR.line}`, fontSize: 13 }}
+              />
+              {filtroMes && (
+                <button onClick={() => setFiltroMes('')} style={{
+                  border: 'none', background: 'none', color: COR.textSecondary, cursor: 'pointer', fontSize: 12.5,
+                }}>limpar filtro</button>
+              )}
+            </div>
+
+            <Painel style={{ marginBottom: 20 }}>
+              <div className="av-display" style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>
+                Total por produto {filtroMes ? '(no mês selecionado)' : '(todo o período)'}
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 1, background: COR.line }}>
+                {reposicaoPorProduto.map((p) => (
+                  <div key={p.produto} style={{ background: COR.paperRaised, padding: '14px 16px' }}>
+                    <div className="av-mono" style={{ fontSize: 24, fontWeight: 500, color: COR.amberDeep }}>
+                      {p.total}L
+                    </div>
+                    <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 4 }}>{p.produto}</div>
+                  </div>
+                ))}
+              </div>
+            </Painel>
+
+            <Painel>
+              <div className="av-display" style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>
+                Total por cliente {filtroMes ? '(no mês selecionado)' : '(todo o período)'}
+              </div>
+              {reposicaoPorCliente.length === 0 ? (
+                <p style={{ color: COR.textSecondary, fontSize: 13, padding: '8px 0' }}>
+                  Nenhuma reposição registrada {filtroMes ? 'neste mês' : 'ainda'}.
+                </p>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
+                      <th style={{ padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700, color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                        Cliente
+                      </th>
+                      {PRODUTOS.map((p) => (
+                        <th key={p} style={{ padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700, color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase', textAlign: 'right' }}>
+                          {p}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {reposicaoPorCliente.map((c) => (
+                      <tr key={c.nome} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
+                        <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{c.nome}</td>
+                        {PRODUTOS.map((p) => (
+                          <td key={p} className="av-mono" style={{ padding: '10px 10px 10px 0', textAlign: 'right', color: c.produtos[p] ? COR.textPrimary : COR.textSecondary }}>
+                            {c.produtos[p] ? `${c.produtos[p]}L` : '—'}
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </Painel>
+          </>
         )}
 
         {!carregando && aba === 'painel' && (
