@@ -924,8 +924,11 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
       const visita = visitas.find((v) => v.id === r.visita_id)
       if (!visita) continue
       const clienteId = visita.cliente_id
-      if (!porClienteMapa[clienteId]) porClienteMapa[clienteId] = { nome: nomeCliente(clienteId), produtos: {} }
+      if (!porClienteMapa[clienteId]) {
+        porClienteMapa[clienteId] = { nome: nomeCliente(clienteId), produtos: {}, datas: new Set() }
+      }
       porClienteMapa[clienteId].produtos[r.produto] = (porClienteMapa[clienteId].produtos[r.produto] || 0) + Number(r.quantidade_litros)
+      porClienteMapa[clienteId].datas.add(visita.data_visita)
       porProdutoMapa[r.produto] = (porProdutoMapa[r.produto] || 0) + Number(r.quantidade_litros)
       detalhes.push({
         data: visita.data_visita,
@@ -935,8 +938,11 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
       })
     }
     detalhes.sort((a, b) => (b.data || '').localeCompare(a.data || ''))
+    const porCliente = Object.values(porClienteMapa)
+      .map((c) => ({ ...c, datas: Array.from(c.datas).sort().reverse() }))
+      .sort((a, b) => a.nome.localeCompare(b.nome))
     return {
-      porCliente: Object.values(porClienteMapa).sort((a, b) => a.nome.localeCompare(b.nome)),
+      porCliente,
       porProduto: PRODUTOS.map((p) => ({ produto: p, total: porProdutoMapa[p] || 0 })),
       detalhes,
     }
@@ -1598,7 +1604,12 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                     <tbody>
                       {porCliente.map((c) => (
                         <tr key={c.nome} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
-                          <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{c.nome}</td>
+                          <td style={{ padding: '10px 10px 10px 0' }}>
+                            <div style={{ fontWeight: 600 }}>{c.nome}</div>
+                            <div className="av-mono" style={{ fontSize: 11, color: COR.textSecondary, marginTop: 2 }}>
+                              {c.datas.join(' · ')}
+                            </div>
+                          </td>
                           {PRODUTOS.map((p) => (
                             <td key={p} className="av-mono" style={{ padding: '10px 10px 10px 0', textAlign: 'right', color: c.produtos[p] ? COR.textPrimary : COR.textSecondary }}>
                               {c.produtos[p] ? `${c.produtos[p]}L` : '—'}
