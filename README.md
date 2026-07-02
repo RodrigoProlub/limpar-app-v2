@@ -1,4 +1,4 @@
-# LimpAr Gestão Comercial
+# LimpAr  Gestão Comercial
 
 Sistema de gestão comercial conectado ao Supabase (banco de dados na nuvem).
 Já está configurado com as credenciais do projeto Supabase "LIMPAR GESTÃO COMERCIAL".
