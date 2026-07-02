@@ -25,6 +25,18 @@ const COR = {
   textOnInkSoft: '#9CA3AF',
 }
 
+// Paleta "Premium" - aplicada por enquanto só no cabeçalho/menu e nas abas
+// Roteiro do Dia / Roteiro Semanal. As demais abas continuam com a paleta
+// COR acima (cards claros), que ainda fica ótima sobre o fundo escuro novo.
+const PREM = {
+  bgPage: '#101115',
+  glass: 'rgba(26,29,38,0.78)',
+  glassBorder: 'rgba(212,175,55,0.16)',
+  gold: '#D4AF37',
+  goldSoft: '#E8C86A',
+  goldOn: '#1C1A14',
+}
+
 const DIAS = ['SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA']
 
 const LINHA_DIA = {
@@ -58,11 +70,12 @@ const SITUACOES = ['Ativo', 'Prospecção', 'Inativo']
 function FontLoader() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
       * { box-sizing: border-box; }
       body { margin: 0; }
       .av-root, .av-root * { font-family: 'Inter', system-ui, sans-serif; }
       .av-display { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; }
+      .av-serif { font-family: 'Fraunces', serif; }
       .av-mono { font-family: 'IBM Plex Mono', monospace; }
       .av-root ::selection { background: ${COR.amber}; color: ${COR.ink}; }
       .av-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -671,6 +684,17 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
 
   function statusDoCliente(id) { return ultimaVisitaPorCliente[id]?.status || 'Pendente' }
 
+  // Retorna quantos dias fazem desde a última visita (null se nunca foi visitado)
+  function diasSemVisita(clienteId) {
+    const ultima = ultimaVisitaPorCliente[clienteId]
+    if (!ultima || !ultima.data_visita) return null
+    const dataVisita = new Date(ultima.data_visita + 'T00:00:00')
+    const hoje = new Date()
+    hoje.setHours(0, 0, 0, 0)
+    const diffMs = hoje - dataVisita
+    return Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  }
+
   async function processarImportacao(file) {
     setImportando(true)
     setResumoImport(null)
@@ -994,25 +1018,37 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
     const listaExibicao = [...ordenados, ...semCoord]
 
     return (
-      <div key={d} style={{ padding: '0 16px', borderLeft: comBorda ? `1px solid ${COR.line}` : 'none' }}>
-        <div style={{ marginBottom: 12 }}>
-          <div className="av-display" style={{ fontSize: 15, fontWeight: 700, color: COR.textPrimary }}>
+      <div key={d} style={{ padding: '0 10px', borderLeft: comBorda ? '1px solid rgba(212,175,55,0.14)' : 'none', minWidth: 0 }}>
+        <div style={{ marginBottom: 14 }}>
+          <div className="av-serif" style={{ fontSize: 17, fontWeight: 700, color: '#F5F1E8' }}>
             {d}
           </div>
-          <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 2 }}>
+          <div style={{ fontSize: 11.5, color: '#9A9488', marginTop: 3 }}>
             {lista.length} {lista.length === 1 ? 'parada' : 'paradas'}
             {comCoord.length > 0 && comCoord.length < lista.length && <> · {comCoord.length} no mapa</>}
           </div>
-          <div style={{ display: 'flex', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap', alignItems: 'center' }}>
             <button
               onClick={() => setDiaComMapaAberto(mapaAberto ? null : d)}
-              style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', fontSize: 11.5, fontWeight: 600, color: COR.amberDeep }}
+              style={{
+                border: `1px solid ${PREM.glassBorder}`, background: 'rgba(255,255,255,0.05)',
+                borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 11.5,
+                fontWeight: 600, color: '#D9D2C0',
+              }}
             >
-              {mapaAberto ? 'ocultar mapa' : 'ver mapa do dia'}
+              {mapaAberto ? 'Ocultar mapa' : 'Ver mapa do dia'}
             </button>
             {linkRota && (
-              <a href={linkRota} target="_blank" rel="noreferrer" style={{ fontSize: 11.5, fontWeight: 600, color: COR.amberDeep, textDecoration: 'none' }}>
-                abrir rota no Google Maps →
+              <a
+                href={linkRota} target="_blank" rel="noreferrer"
+                style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                  border: `1px solid ${PREM.gold}`, background: 'rgba(212,175,55,0.10)',
+                  borderRadius: 8, padding: '7px 12px', fontSize: 11.5, fontWeight: 700,
+                  color: PREM.goldSoft, textDecoration: 'none',
+                }}
+              >
+                📍 Abrir rota no Google Maps
               </a>
             )}
           </div>
@@ -1024,63 +1060,89 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
           </div>
         )}
 
-        <div style={{ position: 'relative' }}>
-          {lista.length > 0 && (
-            <div style={{ position: 'absolute', left: 4, top: 6, bottom: 6, width: 2, background: lc.cor, opacity: 0.35, borderRadius: 1 }} />
-          )}
-          {listaExibicao.map((c) => {
-            const st = STATUS_INFO[statusDoCliente(c.id)]
-            return (
-              <div key={c.id} style={{ position: 'relative', paddingLeft: 22, paddingBottom: 18 }}>
-                <div style={{ position: 'absolute', left: 0, top: 4, width: 10, height: 10, borderRadius: '50%', background: COR.paper, border: `2px solid ${lc.cor}` }} />
-                <div style={{ fontSize: 13.5, fontWeight: 600, color: COR.textPrimary, lineHeight: 1.3 }}>{c.nome}</div>
-                <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 2 }}>{c.bairro}</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                  <Etiqueta texto={c.status_rodizio} info={RODIZIO_INFO} />
-                  <span style={{ width: 1, height: 10, background: COR.line }} />
-                  <span style={{ fontSize: 11, fontWeight: 600, color: st.cor, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{st.label}</span>
-                  {(c.situacao || 'Ativo') !== 'Ativo' && (
-                    <>
-                      <span style={{ width: 1, height: 10, background: COR.line }} />
-                      <Etiqueta texto={c.situacao} info={SITUACAO_INFO} />
-                    </>
+        {listaExibicao.map((c) => {
+          const st = STATUS_INFO[statusDoCliente(c.id)]
+          const ultima = ultimaVisitaPorCliente[c.id]
+          const repsUltima = ultima ? reposicoes.filter((r) => r.visita_id === ultima.id) : []
+          const dias = diasSemVisita(c.id)
+          const atrasado = (c.situacao || 'Ativo') === 'Ativo' && dias !== null && dias >= 14
+          const nuncaVisitado = (c.situacao || 'Ativo') === 'Ativo' && dias === null
+          return (
+            <div key={c.id} style={{
+              background: PREM.glass, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
+              border: atrasado ? '1px solid rgba(212,90,90,0.45)' : `1px solid ${PREM.glassBorder}`,
+              borderRadius: 14, padding: '14px 16px', marginBottom: 12,
+              boxShadow: '0 10px 24px -16px rgba(0,0,0,0.45)',
+            }}>
+              {atrasado && (
+                <div style={{
+                  display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 8,
+                  background: 'rgba(212,90,90,0.15)', color: '#E39B9B', fontSize: 10.5, fontWeight: 700,
+                  letterSpacing: '0.03em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 999,
+                }}>
+                  ⚠ {dias} dias sem visita
+                </div>
+              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, color: '#F5F1E8', lineHeight: 1.3 }}>{c.nome}</div>
+                  <div style={{ fontSize: 11.5, color: '#9A9488', marginTop: 3 }}>{c.bairro}</div>
+                </div>
+                <button
+                  onClick={() => abrirModalVisita(c)}
+                  style={{
+                    background: PREM.gold, color: PREM.goldOn, border: 'none', borderRadius: 8,
+                    padding: '7px 12px', fontSize: 11.5, fontWeight: 700, cursor: 'pointer', whiteSpace: 'nowrap', flexShrink: 0,
+                  }}
+                >
+                  Visitar →
+                </button>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10, flexWrap: 'wrap' }}>
+                <Etiqueta texto={c.status_rodizio} info={RODIZIO_INFO} />
+                <span style={{ width: 1, height: 10, background: 'rgba(255,255,255,0.12)' }} />
+                <span style={{ fontSize: 11, fontWeight: 600, color: st.cor, textTransform: 'uppercase', letterSpacing: '0.03em' }}>{st.label}</span>
+                {(c.situacao || 'Ativo') !== 'Ativo' && (
+                  <>
+                    <span style={{ width: 1, height: 10, background: 'rgba(255,255,255,0.12)' }} />
+                    <Etiqueta texto={c.situacao} info={SITUACAO_INFO} />
+                  </>
+                )}
+                {nuncaVisitado && (
+                  <>
+                    <span style={{ width: 1, height: 10, background: 'rgba(255,255,255,0.12)' }} />
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#E3B95F', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                      Nunca visitado
+                    </span>
+                  </>
+                )}
+              </div>
+
+              <div style={{ marginTop: 8, fontSize: 11.5, color: '#9A9488' }}>
+                mover p/ <SeletorDia cliente={c} onChange={alterarDia} />
+              </div>
+
+              {ultima && (
+                <div style={{
+                  marginTop: 10, padding: '9px 11px', background: 'rgba(0,0,0,0.22)', borderRadius: 8,
+                  fontSize: 11.5, color: '#B5AF9F', borderLeft: `2px solid ${PREM.gold}`,
+                }}>
+                  <span className="av-mono">{ultima.data_visita}</span>
+                  {ultima.observacao && <> · {ultima.observacao}</>}
+                  {repsUltima.length > 0 && (
+                    <div style={{ marginTop: 4, color: PREM.goldSoft, fontWeight: 600 }}>
+                      {repsUltima.map((r) => `${r.produto}: ${r.quantidade_litros}L`).join(' · ')}
+                    </div>
                   )}
                 </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 7 }}>
-                  <button onClick={() => abrirModalVisita(c)} style={{ border: 'none', background: 'none', padding: 0, color: COR.amberDeep, fontSize: 11.5, fontWeight: 600, cursor: 'pointer' }}>
-                    Registrar visita →
-                  </button>
-                  <span style={{ width: 1, height: 10, background: COR.line }} />
-                  <span style={{ fontSize: 11.5, color: COR.textSecondary }}>
-                    mover p/ <SeletorDia cliente={c} onChange={alterarDia} />
-                  </span>
-                </div>
-                {(() => {
-                  const ultima = ultimaVisitaPorCliente[c.id]
-                  if (!ultima) return null
-                  const repsUltima = reposicoes.filter((r) => r.visita_id === ultima.id)
-                  return (
-                    <div style={{
-                      marginTop: 8, padding: '8px 10px', background: COR.lineSoft, borderRadius: 4,
-                      fontSize: 11.5, color: COR.textSecondary,
-                    }}>
-                      <span className="av-mono">{ultima.data_visita}</span>
-                      {ultima.observacao && <> · {ultima.observacao}</>}
-                      {repsUltima.length > 0 && (
-                        <div style={{ marginTop: 4, color: COR.amberDeep, fontWeight: 600 }}>
-                          {repsUltima.map((r) => `${r.produto}: ${r.quantidade_litros}L`).join(' · ')}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })()}
-              </div>
-            )
-          })}
-          {lista.length === 0 && (
-            <p style={{ color: COR.textSecondary, fontSize: 12.5, paddingLeft: 4 }}>Sem paradas.</p>
-          )}
-        </div>
+              )}
+            </div>
+          )
+        })}
+        {lista.length === 0 && (
+          <p style={{ color: '#9A9488', fontSize: 12.5 }}>Sem paradas.</p>
+        )}
       </div>
     )
   }
@@ -1146,14 +1208,14 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
         <FontLoader />
         <div style={{
           minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: COR.ink, padding: 20,
+          background: 'linear-gradient(135deg, #14171F 0%, #1C1A14 55%, #3A2E0F 130%)', padding: 20,
         }}>
           <div style={{ width: 360 }}>
             <div style={{ marginBottom: 28, textAlign: 'center' }}>
-              <div className="av-display" style={{ color: COR.amber, fontSize: 13, fontWeight: 700, letterSpacing: '0.12em' }}>
-                LIMPAR AUTO
+              <div style={{ color: PREM.gold, fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
+                LimpAr Auto
               </div>
-              <div className="av-display" style={{ color: COR.textOnInk, fontSize: 24, fontWeight: 700, marginTop: 4 }}>
+              <div className="av-serif" style={{ color: '#F5F1E8', fontSize: 26, fontWeight: 700, marginTop: 6 }}>
                 Carteira de Visitas
               </div>
             </div>
@@ -1198,24 +1260,31 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
   ]
 
   return (
-    <div className="av-root" style={{ minHeight: '100vh', background: COR.paper }}>
+    <div className="av-root" style={{ minHeight: '100vh', background: PREM.bgPage }}>
       <FontLoader />
 
-      <header style={{ background: COR.ink, padding: '20px 28px 0' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+      <header style={{
+        background: 'linear-gradient(135deg, #14171F 0%, #1C1A14 55%, #3A2E0F 130%)',
+        padding: '32px 28px 40px', borderRadius: '0 0 24px 24px', position: 'relative', overflow: 'hidden',
+      }}>
+        <div style={{
+          position: 'absolute', top: -60, right: -60, width: 240, height: 240, borderRadius: '50%',
+          background: `radial-gradient(circle, ${PREM.gold}4D, transparent 70%)`, pointerEvents: 'none',
+        }} />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12, position: 'relative' }}>
           <div>
-            <div style={{ color: COR.amber, fontSize: 11, fontWeight: 700, letterSpacing: '0.14em' }}>
-              LIMPAR AUTO · BASE SP
+            <div style={{ color: PREM.gold, fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase' }}>
+              LimpAr Auto · Base SP
             </div>
-            <div className="av-display" style={{ color: COR.textOnInk, fontSize: 22, fontWeight: 700, marginTop: 3 }}>
+            <div className="av-serif" style={{ color: '#F5F1E8', fontSize: 28, fontWeight: 700, marginTop: 6 }}>
               Carteira de Visitas
             </div>
           </div>
-          <div className="av-mono" style={{ color: COR.textOnInkSoft, fontSize: 12, textAlign: 'right' }}>
-            <div style={{ color: COR.textOnInk, fontWeight: 700, marginBottom: 4 }}>
+          <div className="av-mono" style={{ color: '#B5AF9F', fontSize: 12, textAlign: 'right' }}>
+            <div style={{ color: '#F5F1E8', fontWeight: 700, marginBottom: 4 }}>
               {vendedor?.nome}
               <button onClick={sair} style={{
-                marginLeft: 12, border: 'none', background: 'none', color: COR.amber,
+                marginLeft: 12, border: 'none', background: 'none', color: PREM.goldSoft,
                 fontSize: 11, fontWeight: 600, cursor: 'pointer', fontFamily: 'Inter, sans-serif',
               }}>sair</button>
             </div>
@@ -1224,17 +1293,17 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
           </div>
         </div>
 
-        <nav style={{ display: 'flex', flexWrap: 'wrap', rowGap: 4, columnGap: 18, marginTop: 18 }}>
+        <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 26, position: 'relative' }}>
           {abas.map(([key, label]) => (
             <button
               key={key}
               onClick={() => setAba(key)}
               style={{
-                background: 'transparent', border: 'none', cursor: 'pointer',
-                padding: '8px 2px', whiteSpace: 'nowrap',
-                fontSize: 13.5, fontWeight: 600,
-                color: aba === key ? COR.textOnInk : COR.textOnInkSoft,
-                borderBottom: aba === key ? `2px solid ${COR.amber}` : '2px solid transparent',
+                border: aba === key ? `1px solid ${PREM.gold}` : '1px solid rgba(212,175,55,0.18)',
+                cursor: 'pointer', borderRadius: 999, padding: '9px 16px', whiteSpace: 'nowrap',
+                fontSize: 13, fontWeight: aba === key ? 700 : 600,
+                background: aba === key ? PREM.gold : 'rgba(255,255,255,0.06)',
+                color: aba === key ? PREM.goldOn : '#D9D2C0',
               }}
             >
               {label}
@@ -1249,7 +1318,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
             {erro}
           </Painel>
         )}
-        {carregando && <p style={{ color: COR.textSecondary }}>Carregando carteira…</p>}
+        {carregando && <p style={{ color: '#B5AF9F' }}>Carregando carteira…</p>}
 
         {!carregando && aba === 'hoje' && (() => {
           const diaHoje = diaSemanaHoje()
@@ -1266,7 +1335,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
             <div style={{ maxWidth: 460 }}>
               <div style={{
                 display: 'inline-block', marginBottom: 4, fontSize: 11, fontWeight: 700,
-                letterSpacing: '0.06em', color: COR.amberDeep, textTransform: 'uppercase',
+                letterSpacing: '0.06em', color: PREM.goldSoft, textTransform: 'uppercase',
               }}>
                 Roteiro do Dia
               </div>
@@ -1278,7 +1347,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
         {!carregando && aba === 'roteiro' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: COR.textSecondary, cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#B5AF9F', cursor: 'pointer' }}>
                 <input type="checkbox" checked={mostrarInativos} onChange={(e) => setMostrarInativos(e.target.checked)} />
                 Mostrar clientes inativos na rota
               </label>
