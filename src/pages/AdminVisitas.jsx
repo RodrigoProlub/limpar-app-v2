@@ -914,26 +914,56 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
     return reposicoes.filter((r) => idsVisitasNoPeriodo.has(r.visita_id))
   }, [reposicoes, visitasFiltradas])
 
-  const reposicaoPorCliente = useMemo(() => {
-    const mapa = {} // clienteId -> { nome, produtos: { produto: totalLitros } }
-    for (const r of reposicoesFiltradas) {
+  // Agrega uma lista de reposicoes em { porProduto, porCliente } - reutilizada
+  // tanto para o total geral quanto para cada mes separado.
+  function agregarReposicoes(lista) {
+    const porClienteMapa = {}
+    const porProdutoMapa = {}
+    for (const r of lista) {
       const visita = visitas.find((v) => v.id === r.visita_id)
       if (!visita) continue
       const clienteId = visita.cliente_id
-      if (!mapa[clienteId]) mapa[clienteId] = { nome: nomeCliente(clienteId), produtos: {} }
-      mapa[clienteId].produtos[r.produto] = (mapa[clienteId].produtos[r.produto] || 0) + Number(r.quantidade_litros)
+      if (!porClienteMapa[clienteId]) porClienteMapa[clienteId] = { nome: nomeCliente(clienteId), produtos: {} }
+      porClienteMapa[clienteId].produtos[r.produto] = (porClienteMapa[clienteId].produtos[r.produto] || 0) + Number(r.quantidade_litros)
+      porProdutoMapa[r.produto] = (porProdutoMapa[r.produto] || 0) + Number(r.quantidade_litros)
     }
-    return Object.values(mapa).sort((a, b) => a.nome.localeCompare(b.nome))
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [reposicoesFiltradas, visitas, clientes])
+    return {
+      porCliente: Object.values(porClienteMapa).sort((a, b) => a.nome.localeCompare(b.nome)),
+      porProduto: PRODUTOS.map((p) => ({ produto: p, total: porProdutoMapa[p] || 0 })),
+    }
+  }
 
-  const reposicaoPorProduto = useMemo(() => {
-    const mapa = {}
-    for (const r of reposicoesFiltradas) {
-      mapa[r.produto] = (mapa[r.produto] || 0) + Number(r.quantidade_litros)
+  const reposicaoAgregada = useMemo(
+    () => agregarReposicoes(reposicoesFiltradas),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [reposicoesFiltradas, visitas, clientes]
+  )
+  const reposicaoPorCliente = reposicaoAgregada.porCliente
+  const reposicaoPorProduto = reposicaoAgregada.porProduto
+
+  // Quando nenhum mes especifico esta selecionado, quebra tudo em secoes por
+  // mes (mais recente primeiro) - para o usuario ver a evolucao mes a mes.
+  const reposicoesPorMes = useMemo(() => {
+    if (filtroMes) return null // ja esta filtrado num mes so, nao precisa quebrar
+    const porMes = {}
+    for (const r of reposicoes) {
+      const visita = visitas.find((v) => v.id === r.visita_id)
+      if (!visita) continue
+      const mes = (visita.data_visita || '').slice(0, 7) // "YYYY-MM"
+      if (!mes) continue
+      if (!porMes[mes]) porMes[mes] = []
+      porMes[mes].push(r)
     }
-    return PRODUTOS.map((p) => ({ produto: p, total: mapa[p] || 0 }))
-  }, [reposicoesFiltradas])
+    const meses = Object.keys(porMes).sort().reverse() // mais recente primeiro
+    return meses.map((mes) => ({ mes, ...agregarReposicoes(porMes[mes]) }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reposicoes, visitas, clientes, filtroMes])
+
+  function nomeMes(mesStr) {
+    const [ano, mes] = mesStr.split('-')
+    const nomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro']
+    return `${nomes[parseInt(mes, 10) - 1]} de ${ano}`
+  }
 
   function renderDiaCard(d, { comBorda = true } = {}) {
     const lc = LINHA_DIA[d]
@@ -1515,78 +1545,106 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
           </Painel>
         )}
 
-        {!carregando && aba === 'reposicoes' && (
-          <>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 16, flexWrap: 'wrap' }}>
-              <div className="av-display" style={{ fontSize: 15, fontWeight: 700 }}>Reposição de produto</div>
-              <input
-                type="month"
-                value={filtroMes}
-                onChange={(e) => setFiltroMes(e.target.value)}
-                style={{ padding: 8, borderRadius: 4, border: `1px solid ${COR.line}`, fontSize: 13 }}
-              />
-              {filtroMes && (
-                <button onClick={() => setFiltroMes('')} style={{
-                  border: 'none', background: 'none', color: COR.textSecondary, cursor: 'pointer', fontSize: 12.5,
-                }}>limpar filtro</button>
-              )}
-            </div>
-
-            <Painel style={{ marginBottom: 20 }}>
-              <div className="av-display" style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>
-                Total por produto {filtroMes ? '(no mês selecionado)' : '(todo o período)'}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 1, background: COR.line }}>
-                {reposicaoPorProduto.map((p) => (
-                  <div key={p.produto} style={{ background: COR.paperRaised, padding: '14px 16px' }}>
-                    <div className="av-mono" style={{ fontSize: 24, fontWeight: 500, color: COR.amberDeep }}>
-                      {p.total}L
+        {!carregando && aba === 'reposicoes' && (() => {
+          const BlocoReposicao = ({ porProduto, porCliente, tituloSufixo }) => (
+            <>
+              <Painel style={{ marginBottom: 14 }}>
+                <div className="av-display" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>
+                  Total por produto {tituloSufixo}
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 1, background: COR.line }}>
+                  {porProduto.map((p) => (
+                    <div key={p.produto} style={{ background: COR.paperRaised, padding: '14px 16px' }}>
+                      <div className="av-mono" style={{ fontSize: 22, fontWeight: 500, color: COR.amberDeep }}>
+                        {p.total}L
+                      </div>
+                      <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 4 }}>{p.produto}</div>
                     </div>
-                    <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 4 }}>{p.produto}</div>
-                  </div>
-                ))}
-              </div>
-            </Painel>
+                  ))}
+                </div>
+              </Painel>
 
-            <Painel>
-              <div className="av-display" style={{ fontSize: 14, fontWeight: 700, marginBottom: 14 }}>
-                Total por cliente {filtroMes ? '(no mês selecionado)' : '(todo o período)'}
-              </div>
-              {reposicaoPorCliente.length === 0 ? (
-                <p style={{ color: COR.textSecondary, fontSize: 13, padding: '8px 0' }}>
-                  Nenhuma reposição registrada {filtroMes ? 'neste mês' : 'ainda'}.
-                </p>
-              ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
-                      <th style={{ padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700, color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
-                        Cliente
-                      </th>
-                      {PRODUTOS.map((p) => (
-                        <th key={p} style={{ padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700, color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase', textAlign: 'right' }}>
-                          {p}
+              <Painel style={{ marginBottom: 24 }}>
+                <div className="av-display" style={{ fontSize: 13.5, fontWeight: 700, marginBottom: 12 }}>
+                  Total por cliente {tituloSufixo}
+                </div>
+                {porCliente.length === 0 ? (
+                  <p style={{ color: COR.textSecondary, fontSize: 13, padding: '8px 0' }}>
+                    Nenhuma reposição registrada.
+                  </p>
+                ) : (
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ textAlign: 'left', borderBottom: `1px solid ${COR.line}` }}>
+                        <th style={{ padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700, color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                          Cliente
                         </th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {reposicaoPorCliente.map((c) => (
-                      <tr key={c.nome} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
-                        <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{c.nome}</td>
                         {PRODUTOS.map((p) => (
-                          <td key={p} className="av-mono" style={{ padding: '10px 10px 10px 0', textAlign: 'right', color: c.produtos[p] ? COR.textPrimary : COR.textSecondary }}>
-                            {c.produtos[p] ? `${c.produtos[p]}L` : '—'}
-                          </td>
+                          <th key={p} style={{ padding: '0 10px 10px 0', fontSize: 10.5, fontWeight: 700, color: COR.textSecondary, letterSpacing: '0.04em', textTransform: 'uppercase', textAlign: 'right' }}>
+                            {p}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {porCliente.map((c) => (
+                        <tr key={c.nome} style={{ borderBottom: `1px solid ${COR.lineSoft}` }}>
+                          <td style={{ padding: '10px 10px 10px 0', fontWeight: 600 }}>{c.nome}</td>
+                          {PRODUTOS.map((p) => (
+                            <td key={p} className="av-mono" style={{ padding: '10px 10px 10px 0', textAlign: 'right', color: c.produtos[p] ? COR.textPrimary : COR.textSecondary }}>
+                              {c.produtos[p] ? `${c.produtos[p]}L` : '—'}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </Painel>
+            </>
+          )
+
+          return (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 20, flexWrap: 'wrap' }}>
+                <div className="av-display" style={{ fontSize: 15, fontWeight: 700 }}>Reposição de produto</div>
+                <input
+                  type="month"
+                  value={filtroMes}
+                  onChange={(e) => setFiltroMes(e.target.value)}
+                  style={{ padding: 8, borderRadius: 4, border: `1px solid ${COR.line}`, fontSize: 13 }}
+                />
+                {filtroMes && (
+                  <button onClick={() => setFiltroMes('')} style={{
+                    border: 'none', background: 'none', color: COR.textSecondary, cursor: 'pointer', fontSize: 12.5,
+                  }}>ver todos os meses separados</button>
+                )}
+              </div>
+
+              {filtroMes ? (
+                <BlocoReposicao porProduto={reposicaoPorProduto} porCliente={reposicaoPorCliente} tituloSufixo="" />
+              ) : reposicoesPorMes.length === 0 ? (
+                <Painel>
+                  <p style={{ color: COR.textSecondary, fontSize: 13, margin: 0 }}>
+                    Nenhuma reposição registrada ainda.
+                  </p>
+                </Painel>
+              ) : (
+                reposicoesPorMes.map(({ mes, porProduto, porCliente }) => (
+                  <div key={mes} style={{ marginBottom: 8 }}>
+                    <div style={{
+                      fontSize: 12, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+                      color: COR.amberDeep, marginBottom: 10, borderBottom: `2px solid ${COR.amber}`, paddingBottom: 6,
+                    }}>
+                      {nomeMes(mes)}
+                    </div>
+                    <BlocoReposicao porProduto={porProduto} porCliente={porCliente} tituloSufixo="" />
+                  </div>
+                ))
               )}
-            </Painel>
-          </>
-        )}
+            </>
+          )
+        })()}
 
         {!carregando && aba === 'painel' && (
           <>
