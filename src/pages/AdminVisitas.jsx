@@ -414,6 +414,55 @@ function lerPlanilhaClientes(arrayBuffer) {
 
 // Busca endereco (ViaCEP) e coordenadas (Nominatim) a partir de um CEP.
 // Usada tanto no cadastro individual quanto na importacao em massa.
+// Busca coordenadas direto pelo CEP, em 3 camadas: primeiro os serviços
+// brasileiros feitos especificamente pra isso (BrasilAPI, AwesomeAPI - bem
+// mais precisos que geocodificação por texto), e só por último tenta
+// "adivinhar" a partir do endereço via Nominatim/OpenStreetMap.
+async function buscarCoordenadasPorCep(cepDigitos, enderecoTextoFallback) {
+  // 1) BrasilAPI v2 - agrega múltiplos provedores, costuma ter a melhor cobertura
+  try {
+    const resp = await fetch(`https://brasilapi.com.br/api/cep/v2/${cepDigitos}`)
+    if (resp.ok) {
+      const dados = await resp.json()
+      const lat = dados?.location?.coordinates?.latitude
+      const lng = dados?.location?.coordinates?.longitude
+      if (lat && lng) return { latitude: parseFloat(lat), longitude: parseFloat(lng) }
+    }
+  } catch {
+    // segue pra próxima fonte
+  }
+
+  // 2) AwesomeAPI - outra base brasileira, formato mais simples
+  try {
+    const resp = await fetch(`https://cep.awesomeapi.com.br/json/${cepDigitos}`)
+    if (resp.ok) {
+      const dados = await resp.json()
+      if (dados?.lat && dados?.lng) {
+        return { latitude: parseFloat(dados.lat), longitude: parseFloat(dados.lng) }
+      }
+    }
+  } catch {
+    // segue pra próxima fonte
+  }
+
+  // 3) Último recurso: geocodificação genérica por texto do endereço
+  if (enderecoTextoFallback) {
+    try {
+      const geoResp = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${encodeURIComponent(enderecoTextoFallback)}`
+      )
+      const geoDados = await geoResp.json()
+      if (Array.isArray(geoDados) && geoDados.length > 0) {
+        return { latitude: parseFloat(geoDados[0].lat), longitude: parseFloat(geoDados[0].lon) }
+      }
+    } catch {
+      // nenhuma fonte encontrou - retorna nulo mesmo
+    }
+  }
+
+  return { latitude: null, longitude: null }
+}
+
 async function buscarEnderecoEGeo(cepDigitos) {
   const resultado = { encontrado: false, endereco: '', bairro: '', latitude: null, longitude: null }
   try {
@@ -427,21 +476,10 @@ async function buscarEnderecoEGeo(cepDigitos) {
       ? `${dados.bairro} - ${dados.localidade}/${dados.uf}`
       : `${dados.localidade}/${dados.uf}`
 
-    try {
-      const enderecoBusca = encodeURIComponent(
-        `${dados.logradouro || ''}, ${dados.bairro || ''}, ${dados.localidade}, ${dados.uf}, Brasil`
-      )
-      const geoResp = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&limit=1&countrycodes=br&q=${enderecoBusca}`
-      )
-      const geoDados = await geoResp.json()
-      if (Array.isArray(geoDados) && geoDados.length > 0) {
-        resultado.latitude = parseFloat(geoDados[0].lat)
-        resultado.longitude = parseFloat(geoDados[0].lon)
-      }
-    } catch {
-      // sem coordenadas - tudo bem, o endereco ja foi encontrado
-    }
+    const enderecoTexto = `${dados.logradouro || ''}, ${dados.bairro || ''}, ${dados.localidade}, ${dados.uf}, Brasil`
+    const coords = await buscarCoordenadasPorCep(cepDigitos, enderecoTexto)
+    resultado.latitude = coords.latitude
+    resultado.longitude = coords.longitude
   } catch {
     // CEP nao encontrado ou falha de rede - resultado.encontrado fica false
   }
