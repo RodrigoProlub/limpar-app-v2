@@ -473,6 +473,10 @@ export default function AdminVisitas() {
   const inputArquivoRef = useRef(null)
   const [modoDia, setModoDia] = useState('auto') // 'auto' | 'manual'
   const [diaManual, setDiaManual] = useState('SEGUNDA')
+
+  const [corrigindoLocalizacao, setCorrigindoLocalizacao] = useState(false)
+  const [progressoLocalizacao, setProgressoLocalizacao] = useState([]) // [{ nome, status, mensagem }]
+  const [resumoLocalizacao, setResumoLocalizacao] = useState(null)
   const [salvandoCliente, setSalvandoCliente] = useState(false)
 
   const [modalVisita, setModalVisita] = useState(null)
@@ -693,6 +697,57 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
     hoje.setHours(0, 0, 0, 0)
     const diffMs = hoje - dataVisita
     return Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  }
+
+  async function corrigirLocalizacoesFaltantes() {
+    const semLocalizacao = clientes.filter((c) => !c.latitude || !c.longitude)
+    if (semLocalizacao.length === 0) return
+
+    setCorrigindoLocalizacao(true)
+    setResumoLocalizacao(null)
+    setProgressoLocalizacao([])
+    setErro('')
+
+    let ok = 0
+    let semCep = 0
+    let naoEncontrado = 0
+    const lista = []
+
+    for (const c of semLocalizacao) {
+      const cepDigitos = (c.cep || '').replace(/\D/g, '')
+      if (cepDigitos.length !== 8) {
+        semCep++
+        lista.push({ nome: c.nome, status: 'erro', mensagem: 'CEP inválido ou vazio' })
+        setProgressoLocalizacao([...lista])
+        continue
+      }
+
+      const r = await buscarEnderecoEGeo(cepDigitos)
+      if (r.latitude && r.longitude) {
+        try {
+          const { error } = await supabase
+            .from('carteira_clientes')
+            .update({ latitude: r.latitude, longitude: r.longitude })
+            .eq('id', c.id)
+          if (error) throw error
+          ok++
+          lista.push({ nome: c.nome, status: 'ok', mensagem: 'Localização encontrada' })
+        } catch (err) {
+          lista.push({ nome: c.nome, status: 'erro', mensagem: err.message })
+        }
+      } else {
+        naoEncontrado++
+        lista.push({ nome: c.nome, status: 'pulado', mensagem: 'Não achou coordenadas para esse CEP' })
+      }
+      setProgressoLocalizacao([...lista])
+
+      // Respeita o limite do serviço gratuito de geolocalização (1 busca por segundo)
+      await new Promise((res) => setTimeout(res, 1100))
+    }
+
+    setResumoLocalizacao({ total: semLocalizacao.length, ok, semCep, naoEncontrado })
+    await carregarTudo()
+    setCorrigindoLocalizacao(false)
   }
 
   async function processarImportacao(file) {
@@ -1432,6 +1487,57 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                 </p>
               )}
             </Painel>
+
+            {(() => {
+              const semLocalizacao = clientes.filter((c) => !c.latitude || !c.longitude)
+              if (semLocalizacao.length === 0) return null
+              return (
+                <Painel style={{ marginBottom: 20 }}>
+                  <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 6 }}>
+                    Corrigir localização de clientes antigos
+                  </div>
+                  <p style={{ fontSize: 12.5, color: COR.textSecondary, marginTop: 0, marginBottom: 14 }}>
+                    {semLocalizacao.length} {semLocalizacao.length === 1 ? 'cliente ainda não tem' : 'clientes ainda não têm'} localização
+                    salva (cadastrados antes da busca automática existir) — por isso não aparecem no mapa
+                    nem contam pra rota do Google Maps. Clique abaixo pra buscar a localização de todos de uma vez.
+                  </p>
+                  <Botao variant="amber" onClick={corrigirLocalizacoesFaltantes} disabled={corrigindoLocalizacao}>
+                    {corrigindoLocalizacao ? 'Buscando…' : `Buscar localização de ${semLocalizacao.length} clientes`}
+                  </Botao>
+
+                  {corrigindoLocalizacao && (
+                    <p style={{ fontSize: 12.5, color: COR.amberDeep, marginTop: 12 }}>
+                      Isso demora cerca de 1 segundo por cliente. Não feche esta aba.
+                    </p>
+                  )}
+
+                  {progressoLocalizacao.length > 0 && (
+                    <div className="av-scroll" style={{ maxHeight: 220, overflowY: 'auto', marginTop: 14, border: `1px solid ${COR.lineSoft}`, borderRadius: 4 }}>
+                      {progressoLocalizacao.map((p, i) => {
+                        const cor = p.status === 'ok' ? '#3F6B4D' : p.status === 'pulado' ? '#B6862F' : '#8C3F4F'
+                        return (
+                          <div key={i} style={{
+                            display: 'flex', justifyContent: 'space-between', gap: 10, padding: '7px 10px',
+                            borderBottom: i < progressoLocalizacao.length - 1 ? `1px solid ${COR.lineSoft}` : 'none',
+                            fontSize: 12.5,
+                          }}>
+                            <span style={{ fontWeight: 600 }}>{p.nome || '(sem nome)'}</span>
+                            <span style={{ color: cor, fontWeight: 600, whiteSpace: 'nowrap' }}>{p.mensagem}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+
+                  {resumoLocalizacao && (
+                    <p style={{ fontSize: 13, fontWeight: 600, marginTop: 14, marginBottom: 0 }}>
+                      {resumoLocalizacao.ok} encontrados · {resumoLocalizacao.naoEncontrado} não encontrados · {resumoLocalizacao.semCep} sem CEP válido
+                      {' '}(de {resumoLocalizacao.total}).
+                    </p>
+                  )}
+                </Painel>
+              )
+            })()}
 
             <Painel style={{ marginBottom: 20 }}>
               <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
