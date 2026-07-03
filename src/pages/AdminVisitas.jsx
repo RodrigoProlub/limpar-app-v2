@@ -13,21 +13,21 @@ import * as XLSX from 'xlsx'
 const COR = {
   ink: '#14181F',
   inkSoft: '#1E2430',
-  paper: '#F6F4EF',
-  paperRaised: '#FFFFFF',
-  line: '#DEDACF',
-  lineSoft: '#EAE7DD',
-  amber: '#F2A93B',
-  amberDeep: '#C97F0F',
-  textPrimary: '#1B1F27',
-  textSecondary: '#6B6458',
+  paper: '#14161C',
+  paperRaised: '#1A1D26',
+  line: 'rgba(212,175,55,0.18)',
+  lineSoft: 'rgba(255,255,255,0.08)',
+  amber: '#D4AF37',
+  amberDeep: '#E8C86A',
+  textPrimary: '#F5F1E8',
+  textSecondary: '#9A9488',
   textOnInk: '#F6F4EF',
   textOnInkSoft: '#9CA3AF',
 }
 
-// Paleta "Premium" - aplicada por enquanto só no cabeçalho/menu e nas abas
-// Roteiro do Dia / Roteiro Semanal. As demais abas continuam com a paleta
-// COR acima (cards claros), que ainda fica ótima sobre o fundo escuro novo.
+// Paleta "Premium" - agora aplicada em todo o app. Mantida separada dos
+// tokens COR acima porque o cabeçalho/nav usam gradiente e brilho próprios
+// que não fazem sentido como tokens de card comuns.
 const PREM = {
   bgPage: '#101115',
   glass: 'rgba(26,29,38,0.78)',
@@ -1204,7 +1204,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
 
   if (!autenticado) {
     return (
-      <div className="av-root">
+      <div className="av-root" style={{ color: COR.textPrimary }}>
         <FontLoader />
         <div style={{
           minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -1260,7 +1260,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
   ]
 
   return (
-    <div className="av-root" style={{ minHeight: '100vh', background: PREM.bgPage }}>
+    <div className="av-root" style={{ minHeight: '100vh', background: PREM.bgPage, color: COR.textPrimary }}>
       <FontLoader />
 
       <header style={{
