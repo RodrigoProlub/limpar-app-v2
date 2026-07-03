@@ -1097,6 +1097,70 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
     return `${nomes[parseInt(mes, 10) - 1]} de ${ano}`
   }
 
+  // ---- Estatísticas do Painel (semana atual, mês atual, atraso, rodízio) ----
+  const inicioSemanaAtual = useMemo(() => {
+    const hoje = new Date()
+    const diaSemana = hoje.getDay() // 0=domingo, 1=segunda...
+    const deslocamento = diaSemana === 0 ? 6 : diaSemana - 1 // volta até a segunda-feira
+    const segunda = new Date(hoje)
+    segunda.setDate(hoje.getDate() - deslocamento)
+    segunda.setHours(0, 0, 0, 0)
+    return segunda
+  }, [])
+
+  const visitadosNaSemana = useMemo(() => {
+    return visitas.filter((v) => {
+      if (v.status !== 'Visitado' || !v.data_visita) return false
+      const dataVisita = new Date(v.data_visita + 'T00:00:00')
+      return dataVisita >= inicioSemanaAtual
+    }).length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visitas, inicioSemanaAtual])
+
+  const mesAtualStr = useMemo(() => new Date().toISOString().slice(0, 7), [])
+
+  const repostosNoMes = useMemo(() => {
+    let total = 0
+    for (const r of reposicoes) {
+      const visita = visitas.find((v) => v.id === r.visita_id)
+      if (visita && (visita.data_visita || '').startsWith(mesAtualStr)) {
+        total += Number(r.quantidade_litros)
+      }
+    }
+    return total
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reposicoes, visitas, mesAtualStr])
+
+  const reposicaoPorProdutoMesAtual = useMemo(() => {
+    const mapa = {}
+    for (const r of reposicoes) {
+      const visita = visitas.find((v) => v.id === r.visita_id)
+      if (visita && (visita.data_visita || '').startsWith(mesAtualStr)) {
+        mapa[r.produto] = (mapa[r.produto] || 0) + Number(r.quantidade_litros)
+      }
+    }
+    return PRODUTOS.map((p) => ({ produto: p, total: mapa[p] || 0 }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [reposicoes, visitas, mesAtualStr])
+
+  const clientesAtrasados = useMemo(() => {
+    return clientes.filter((c) => {
+      if ((c.situacao || 'Ativo') !== 'Ativo') return false
+      const dias = diasSemVisita(c.id)
+      return dias !== null && dias >= 14
+    }).length
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [clientes, ultimaVisitaPorCliente])
+
+  const rodizioDaCarteira = useMemo(() => {
+    const ativos = clientes.filter((c) => (c.situacao || 'Ativo') !== 'Inativo')
+    const fora = ativos.filter((c) => c.status_rodizio === 'Fora').length
+    const dentro = ativos.filter((c) => c.status_rodizio === 'Dentro').length
+    const confirmar = ativos.filter((c) => c.status_rodizio === 'Confirmar').length
+    const total = ativos.length || 1
+    return { fora, dentro, confirmar, total }
+  }, [clientes])
+
   function renderDiaCard(d, { comBorda = true } = {}) {
     const lc = LINHA_DIA[d]
     const lista = clientesPorDia.map[d]
@@ -1921,41 +1985,103 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
 
         {!carregando && aba === 'painel' && (
           <>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, marginBottom: 24, background: COR.line }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, marginBottom: 20, background: COR.line, borderRadius: 12, overflow: 'hidden' }}>
               {[
-                ['Total na carteira', clientes.length, COR.textPrimary],
-                ['Visitados', totalVisitado, '#3F6B4D'],
-                ['Pendentes', totalPendente, '#B6862F'],
-                ['Registros no histórico', visitas.length, COR.amberDeep],
+                ['Total na carteira', clientes.length, COR.amberDeep],
+                ['Visitados na semana', visitadosNaSemana, '#3F6B4D'],
+                ['Repostos no mês', `${repostosNoMes}L`, COR.amberDeep],
+                ['Atrasados (14+ dias)', clientesAtrasados, clientesAtrasados > 0 ? '#C97878' : '#3F6B4D'],
               ].map(([label, valor, cor]) => (
                 <div key={label} style={{ background: COR.paperRaised, padding: '18px 16px' }}>
-                  <div className="av-mono" style={{ fontSize: 30, fontWeight: 500, color: cor }}>{valor}</div>
-                  <div style={{ fontSize: 11.5, color: COR.textSecondary, marginTop: 4 }}>{label}</div>
+                  <div className="av-serif" style={{ fontSize: 26, fontWeight: 700, color: cor }}>{valor}</div>
+                  <div style={{ fontSize: 11, color: COR.textSecondary, marginTop: 4 }}>{label}</div>
                 </div>
               ))}
             </div>
 
-            <Painel>
-              <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
-                Progresso por dia
-              </div>
-              {painelPorDia.map((p) => {
-                const pct = p.total ? Math.round((p.visitados / p.total) * 100) : 0
-                return (
-                  <div key={p.dia} style={{ marginBottom: 16 }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
-                      <span style={{ fontWeight: 700, color: LINHA_DIA[p.dia].cor }}>{p.dia}</span>
-                      <span className="av-mono" style={{ color: COR.textSecondary }}>
-                        {p.visitados}/{p.total} · {pct}%
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+              <Painel>
+                <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
+                  Progresso por dia
+                </div>
+                {painelPorDia.map((p) => {
+                  const pct = p.total ? Math.round((p.visitados / p.total) * 100) : 0
+                  return (
+                    <div key={p.dia} style={{ marginBottom: 16 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 6 }}>
+                        <span style={{ fontWeight: 700, color: LINHA_DIA[p.dia].cor }}>{p.dia}</span>
+                        <span className="av-mono" style={{ color: COR.textSecondary }}>
+                          {p.visitados}/{p.total} · {pct}%
+                        </span>
+                      </div>
+                      <div style={{ height: 6, background: COR.lineSoft, borderRadius: 3, overflow: 'hidden' }}>
+                        <div style={{ height: '100%', width: pct + '%', background: LINHA_DIA[p.dia].cor, borderRadius: 3 }} />
+                      </div>
+                    </div>
+                  )
+                })}
+              </Painel>
+
+              <Painel>
+                <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginBottom: 14 }}>
+                  Rodízio da carteira
+                </div>
+                {(rodizioDaCarteira.fora + rodizioDaCarteira.dentro + rodizioDaCarteira.confirmar) > 0 ? (
+                  <>
+                    <div style={{ display: 'flex', height: 26, borderRadius: 6, overflow: 'hidden', marginBottom: 12 }}>
+                      {rodizioDaCarteira.fora > 0 && (
+                        <div style={{ width: `${(rodizioDaCarteira.fora / rodizioDaCarteira.total) * 100}%`, background: '#3F6B4D' }} />
+                      )}
+                      {rodizioDaCarteira.dentro > 0 && (
+                        <div style={{ width: `${(rodizioDaCarteira.dentro / rodizioDaCarteira.total) * 100}%`, background: '#8C3F4F' }} />
+                      )}
+                      {rodizioDaCarteira.confirmar > 0 && (
+                        <div style={{ width: `${(rodizioDaCarteira.confirmar / rodizioDaCarteira.total) * 100}%`, background: '#B6862F' }} />
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 14, fontSize: 11.5, color: COR.textSecondary, flexWrap: 'wrap' }}>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3F6B4D', display: 'inline-block' }} />
+                        {rodizioDaCarteira.fora} Fora do anel
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#8C3F4F', display: 'inline-block' }} />
+                        {rodizioDaCarteira.dentro} Dentro do anel
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#B6862F', display: 'inline-block' }} />
+                        {rodizioDaCarteira.confirmar} Confirmar
                       </span>
                     </div>
-                    <div style={{ height: 6, background: COR.lineSoft, borderRadius: 3, overflow: 'hidden' }}>
-                      <div style={{ height: '100%', width: pct + '%', background: LINHA_DIA[p.dia].cor, borderRadius: 3 }} />
-                    </div>
-                  </div>
-                )
-              })}
-            </Painel>
+                  </>
+                ) : (
+                  <p style={{ color: COR.textSecondary, fontSize: 13, margin: 0 }}>Sem dados suficientes ainda.</p>
+                )}
+
+                <div className="av-display" style={{ fontSize: 15, fontWeight: 700, marginTop: 24, marginBottom: 14 }}>
+                  Reposição por produto ({nomeMes(mesAtualStr)})
+                </div>
+                {repostosNoMes === 0 ? (
+                  <p style={{ color: COR.textSecondary, fontSize: 13, margin: 0 }}>Nenhuma reposição registrada este mês.</p>
+                ) : (
+                  reposicaoPorProdutoMesAtual.map((p) => {
+                    const maior = Math.max(...reposicaoPorProdutoMesAtual.map((x) => x.total), 1)
+                    const pct = Math.round((p.total / maior) * 100)
+                    return (
+                      <div key={p.produto} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+                        <div style={{ width: 76, fontSize: 11.5, fontWeight: 700, color: '#D9D2C0', flexShrink: 0 }}>{p.produto}</div>
+                        <div style={{ flex: 1, height: 14, background: COR.lineSoft, borderRadius: 4, overflow: 'hidden' }}>
+                          <div style={{ height: '100%', width: `${pct}%`, background: COR.amber }} />
+                        </div>
+                        <div className="av-mono" style={{ width: 40, textAlign: 'right', fontSize: 11, color: COR.textSecondary, flexShrink: 0 }}>
+                          {p.total}L
+                        </div>
+                      </div>
+                    )
+                  })
+                )}
+              </Painel>
+            </div>
           </>
         )}
 
