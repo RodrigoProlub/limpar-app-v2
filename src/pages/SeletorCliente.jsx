@@ -68,13 +68,25 @@ export default function SeletorCliente() {
           </div>
           {erro && <div style={{ color: 'var(--danger)', fontSize: 12, marginTop: 6 }}>{erro}</div>}
         </div>
-        <div style={{ textAlign: 'center', marginTop: 16 }}>
+        <div style={{ marginTop: 16 }}>
           <a
-            href="/admin"
-            style={{ fontSize: 12, color: 'var(--gray-400)', textDecoration: 'none' }}
+            href="/admin/visitas"
+            style={{
+              display: 'block', textAlign: 'center', padding: '12px',
+              background: 'linear-gradient(135deg, #0f1f33, #1e3a5f)',
+              color: '#FFB000', borderRadius: 10, fontWeight: 700,
+              fontSize: 14, textDecoration: 'none', letterSpacing: 0.5,
+              marginBottom: 10, border: '1px solid #FFB000'
+            }}
           >
-            <i className="fas fa-chart-line"></i> Dashboard Geral
+            <i className="fas fa-map-marked-alt" style={{ marginRight: 8 }}></i>
+            ROTEIRO DE VISITAS
           </a>
+          <div style={{ textAlign: 'center' }}>
+            <a href="/admin" style={{ fontSize: 12, color: 'var(--gray-400)', textDecoration: 'none' }}>
+              <i className="fas fa-chart-line"></i> Dashboard Geral
+            </a>
+          </div>
         </div>
       </div>
     </div>
