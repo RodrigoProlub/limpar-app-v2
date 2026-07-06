@@ -32,11 +32,12 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
   const resumoMes = useMemo(() => {
     return vendedores.map(v => {
       const comissaoFixa = (comissoes.find(c => c.vendedor === v.nome) || {}).valor || 0
+      const cargo = v.cargo || ''
       const qtdVendedor = vendas.filter(x => x.vendedor === v.nome && x.data.startsWith(mesSelecionado) && x.status === 'Concluído').length
       const qtdAplicador = vendas.filter(x => x.aplicador === v.nome && x.data.startsWith(mesSelecionado) && x.status === 'Concluído').length
       const qtd = qtdVendedor + qtdAplicador
       const jaFechado = fechamentos.some(f => f.vendedor === v.nome && f.mes === mesSelecionado)
-      return { nome: v.nome, qtd, comissaoFixa, total: qtd * comissaoFixa, jaFechado }
+      return { nome: v.nome, cargo, qtdVendedor, qtdAplicador, qtd, comissaoFixa, total: qtd * comissaoFixa, jaFechado }
     }).filter(r => r.qtd > 0 || r.jaFechado)
   }, [vendedores, vendas, comissoes, fechamentos, mesSelecionado])
 
@@ -105,16 +106,24 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
         </div>
         <div style={{ overflowX: 'auto' }}>
           <table>
-            <thead><tr><th>Vendedor</th><th>TMO/Venda Concluído</th><th>Valor por TMO</th><th>Total</th><th>Status</th></tr></thead>
+            <thead><tr><th>Vendedor</th><th>Cargo</th><th>Como Vendedor</th><th>Como Aplicador</th><th>Total TMO</th><th>Valor por TMO</th><th>Total</th><th>Status</th></tr></thead>
             <tbody>
               {resumoMes.length === 0 ? (
-                <tr><td colSpan={5} style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem' }}>Nenhum TMO/Venda concluído este mês ainda.</td></tr>
+                <tr><td colSpan={8} style={{ textAlign: 'center', color: '#94a3b8', padding: '1.5rem' }}>Nenhum TMO/Venda concluído este mês ainda.</td></tr>
               ) : resumoMes.map(r => (
                 <tr key={r.nome}>
                   <td><b>{r.nome}</b></td>
-                  <td>{r.qtd}</td>
+                  <td>
+                    {r.cargo === 'Vendedor/Atendente' && <span className="badge badge-warning">{r.cargo}</span>}
+                    {r.cargo === 'Aplicador/Mecânico' && <span className="badge badge-success">{r.cargo}</span>}
+                    {r.cargo === 'Vendedor e Aplicador' && <span className="badge" style={{background:'rgba(139,92,246,0.15)',color:'#a78bfa',border:'1px solid rgba(139,92,246,0.3)'}}>{r.cargo}</span>}
+                    {!r.cargo && '—'}
+                  </td>
+                  <td style={{ color: 'rgba(255,255,255,0.6)' }}>{r.qtdVendedor} TMO</td>
+                  <td style={{ color: 'rgba(255,255,255,0.6)' }}>{r.qtdAplicador} TMO</td>
+                  <td><b>{r.qtd}</b></td>
                   <td>R$ {fmt(r.comissaoFixa)}</td>
-                  <td><b style={{ color: '#dc2626' }}>R$ {fmt(r.total)}</b></td>
+                  <td><b style={{ color: '#38bdf8' }}>R$ {fmt(r.total)}</b></td>
                   <td>{r.jaFechado
                     ? <span className="badge badge-success">Fechado</span>
                     : <span className="badge badge-warning">Pendente</span>}</td>
@@ -154,13 +163,22 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
       <div className="table-container">
         <div style={{ overflowX: 'auto' }}>
           <table>
-            <thead><tr><th>Vendedor</th><th>Comissão por TMO/Venda (R$)</th><th>Ações</th></tr></thead>
+            <thead><tr><th>Vendedor</th><th>Cargo</th><th>Comissão por TMO/Venda (R$)</th><th>Ações</th></tr></thead>
             <tbody>
               {comissoes.length === 0 ? (
                 <tr><td colSpan={3} style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>Nenhuma comissão configurada.</td></tr>
-              ) : comissoes.map(c => (
+              ) : comissoes.map(c => {
+                const vend = vendedores.find(v => v.nome === c.vendedor)
+                const cargo = vend ? vend.cargo : ''
+                return (
                 <tr key={c.id}>
-                  <td>{c.vendedor}</td>
+                  <td><b>{c.vendedor}</b></td>
+                  <td>
+                    {cargo === 'Vendedor/Atendente' && <span className="badge badge-warning">{cargo}</span>}
+                    {cargo === 'Aplicador/Mecânico' && <span className="badge badge-success">{cargo}</span>}
+                    {cargo === 'Vendedor e Aplicador' && <span className="badge" style={{background:'rgba(139,92,246,0.15)',color:'#a78bfa',border:'1px solid rgba(139,92,246,0.3)'}}>{cargo}</span>}
+                    {!cargo && '—'}
+                  </td>
                   <td><b>R$ {fmt(c.valor)}</b> <span style={{ color: '#94a3b8', fontSize: 11 }}>/ TMO</span></td>
                   <td>
                     <div style={{ display: 'flex', gap: 6 }}>
@@ -169,7 +187,7 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
             </tbody>
           </table>
         </div>
