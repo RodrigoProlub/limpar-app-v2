@@ -7,7 +7,7 @@ Já está configurado com as credenciais do projeto Supabase "LIMPAR GESTÃO COM
 
 1. Crie uma conta gratuita em https://vercel.com (pode usar login do GitHub ou Google).
 2. No painel do Vercel, clique em "Add New" → "Project".
-3. Se pedir para conectar a um repositório do GitHub, crie um repositório novo no GitHub e suba esta pasta inteira nele.
+3. Se  pedir para conectar a um repositório do GitHub, crie um repositório novo no GitHub e suba esta pasta inteira nele.
    - Alternativa mais simples: use a opção "Deploy" arrastando a pasta do projeto, se disponível na sua conta.
 4. Quando o Vercel perguntar o "Framework Preset", selecione **Vite**.
 5. Clique em "Deploy".
