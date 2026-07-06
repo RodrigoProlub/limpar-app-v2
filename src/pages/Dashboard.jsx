@@ -79,7 +79,17 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
       const key = year + '-' + String(i + 1).padStart(2, '0')
       return vendas.filter(v => v.data.startsWith(key) && v.status !== 'Cancelado').reduce((s, v) => s + v.valor, 0)
     })
-    return { total, concluidas, pendentes, canceladas, fatDia, fatMes, fatAno, ticket, maisVendido, melhor, fatMensal, servCount }
+    // Projeção de fechamento do mês
+    const hoje = new Date()
+    const diaAtual = hoje.getDate()
+    const totalDiasMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate()
+    const diasUteis = diaAtual // simplificado: dias corridos passados
+    const diasRestantes = totalDiasMes - diaAtual
+    const mediaDiaria = diasUteis > 0 ? total / diasUteis : 0
+    const projecaoTotal = Math.round(total + mediaDiaria * diasRestantes)
+    const projecaoFat = fatMes + (fatMes / (total || 1)) * (mediaDiaria * diasRestantes)
+
+    return { total, concluidas, pendentes, canceladas, fatDia, fatMes, fatAno, ticket, maisVendido, melhor, fatMensal, servCount, diaAtual, totalDiasMes, diasRestantes, mediaDiaria, projecaoTotal, projecaoFat }
   }, [vendas, mesSelecionado])
 
   const commissionList = useMemo(() => {
@@ -143,6 +153,36 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
         {statCard('Serviço Mais Vendido', dash.maisVendido)}
         {statCard('Melhor Vendedor', dash.melhor)}
       </div>
+
+      {/* PROJEÇÃO DE FECHAMENTO */}
+      {dash.total > 0 && (
+        <div className="card" style={{ marginBottom: '1.25rem', border: '1px solid rgba(255,176,0,0.3)', background: 'rgba(255,176,0,0.06)' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 11, color: 'rgba(255,176,0,0.7)', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 4 }}>
+                📈 Projeção de Fechamento — {mesLabel(mesSelecionado)}
+              </div>
+              <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
+                Dia {dash.diaAtual} de {dash.totalDiasMes} · Média de {dash.mediaDiaria.toFixed(1)} TMO/dia · {dash.diasRestantes} dias restantes
+              </div>
+            </div>
+            <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Projeção TMO</div>
+                <div style={{ fontSize: 26, fontWeight: 900, color: '#FFB000' }}>{dash.projecaoTotal}</div>
+              </div>
+              <div style={{ textAlign: 'center' }}>
+                <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>Projeção Faturamento</div>
+                <div style={{ fontSize: 20, fontWeight: 800, color: 'white' }}>R$ {fmt(dash.projecaoFat)}</div>
+              </div>
+            </div>
+          </div>
+          <div style={{ marginTop: 12, height: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 4, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: Math.min((dash.diaAtual / dash.totalDiasMes) * 100, 100) + '%', background: 'linear-gradient(90deg, #FFB000, #FF8C00)', borderRadius: 4, transition: 'width 0.5s' }}></div>
+          </div>
+          <div style={{ fontSize: 10, color: 'rgba(255,255,255,0.3)', marginTop: 4 }}>Progresso do mês: {Math.round((dash.diaAtual / dash.totalDiasMes) * 100)}% dos dias concluídos</div>
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '1rem', marginBottom: '1rem' }}>
         <div className="card">
