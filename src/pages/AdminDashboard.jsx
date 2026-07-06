@@ -89,16 +89,16 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
     })
     // Projeção de fechamento do mês (com dias úteis reais)
     const hojeDate = new Date()
-    const ano = hojeDate.getFullYear()
+    const anoProj = hojeDate.getFullYear()
     const mes = hojeDate.getMonth()
     const diaAtual = hojeDate.getDate()
-    const totalDiasMes = new Date(ano, mes + 1, 0).getDate()
+    const totalDiasMes = new Date(anoProj, mes + 1, 0).getDate()
 
     // Conta dias úteis passados e restantes no mês
     let diasUteisPastados = 0
     let diasUteisRestantes = 0
     for (let d = 1; d <= totalDiasMes; d++) {
-      const diaSemana = new Date(ano, mes, d).getDay() // 0=dom, 6=sab
+      const diaSemana = new Date(anoProj, mes, d).getDay() // 0=dom, 6=sab
       const ehUtil = trabalhaDomingo ? diaSemana !== 6 : diaSemana !== 0 && diaSemana !== 6
       if (d <= diaAtual) { if (ehUtil) diasUteisPastados++ }
       else { if (ehUtil) diasUteisRestantes++ }
