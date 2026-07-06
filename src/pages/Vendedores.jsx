@@ -48,7 +48,12 @@ export default function Vendedores({ vendedores, onChanged, notify, clienteId })
                 <tr key={v.id}>
                   <td><b>{v.nome}</b></td>
                   <td>{v.tel || '—'}</td>
-                  <td>{v.cargo || '—'}</td>
+                  <td>
+                    {v.cargo === 'Vendedor/Atendente' && <span className="badge badge-warning">{v.cargo}</span>}
+                    {v.cargo === 'Aplicador/Mecânico' && <span className="badge badge-success">{v.cargo}</span>}
+                    {v.cargo === 'Vendedor e Aplicador' && <span className="badge" style={{background:'rgba(139,92,246,0.15)',color:'#a78bfa',border:'1px solid rgba(139,92,246,0.3)'}}>{v.cargo}</span>}
+                    {!v.cargo && '—'}
+                  </td>
                   <td>{v.meta} TMO</td>
                   <td><span className={'badge ' + (v.status === 'Ativo' ? 'badge-success' : 'badge-danger')}>{v.status}</span></td>
                   <td>
@@ -70,7 +75,7 @@ export default function Vendedores({ vendedores, onChanged, notify, clienteId })
           fields={[
             { key: 'nome', label: 'Nome' },
             { key: 'tel', label: 'Telefone' },
-            { key: 'cargo', label: 'Cargo' },
+            { key: 'cargo', label: 'Cargo', type: 'select', options: ['Vendedor/Atendente', 'Aplicador/Mecânico', 'Vendedor e Aplicador'] },
             { key: 'meta', label: 'Meta Mensal (qtd. TMO/Venda)', type: 'number' },
             { key: 'status', label: 'Status', type: 'select', options: ['Ativo', 'Inativo'] },
           ]}
