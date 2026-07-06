@@ -32,7 +32,9 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
   const resumoMes = useMemo(() => {
     return vendedores.map(v => {
       const comissaoFixa = (comissoes.find(c => c.vendedor === v.nome) || {}).valor || 0
-      const qtd = vendas.filter(x => x.vendedor === v.nome && x.data.startsWith(mesSelecionado) && x.status === 'Concluído').length
+      const qtdVendedor = vendas.filter(x => x.vendedor === v.nome && x.data.startsWith(mesSelecionado) && x.status === 'Concluído').length
+      const qtdAplicador = vendas.filter(x => x.aplicador === v.nome && x.data.startsWith(mesSelecionado) && x.status === 'Concluído').length
+      const qtd = qtdVendedor + qtdAplicador
       const jaFechado = fechamentos.some(f => f.vendedor === v.nome && f.mes === mesSelecionado)
       return { nome: v.nome, qtd, comissaoFixa, total: qtd * comissaoFixa, jaFechado }
     }).filter(r => r.qtd > 0 || r.jaFechado)
