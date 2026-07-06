@@ -47,6 +47,14 @@ function DoughnutChart({ labels, values }) {
 export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }) {
   const mesAtual = new Date().toISOString().slice(0, 7)
   const [mesSelecionado, setMesSelecionado] = useState(mesAtual)
+  const [trabalhaDomingo, setTrabalhaDomingo] = useState(() => {
+    return localStorage.getItem('limpar_trabalha_domingo') === 'true'
+  })
+
+  const toggleDomingo = (val) => {
+    setTrabalhaDomingo(val)
+    localStorage.setItem('limpar_trabalha_domingo', String(val))
+  }
 
   // meses disponíveis (sempre inclui o mês atual)
   const mesesDisponiveis = useMemo(() => {
@@ -79,18 +87,29 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
       const key = year + '-' + String(i + 1).padStart(2, '0')
       return vendas.filter(v => v.data.startsWith(key) && v.status !== 'Cancelado').reduce((s, v) => s + v.valor, 0)
     })
-    // Projeção de fechamento do mês
+    // Projeção de fechamento do mês (com dias úteis reais)
     const hojeDate = new Date()
+    const anoProj = hojeDate.getFullYear()
+    const mes = hojeDate.getMonth()
     const diaAtual = hojeDate.getDate()
-    const totalDiasMes = new Date(hojeDate.getFullYear(), hojeDate.getMonth() + 1, 0).getDate()
-    const diasUteis = diaAtual // simplificado: dias corridos passados
-    const diasRestantes = totalDiasMes - diaAtual
-    const mediaDiaria = diasUteis > 0 ? total / diasUteis : 0
-    const projecaoTotal = Math.round(total + mediaDiaria * diasRestantes)
-    const projecaoFat = fatMes + (fatMes / (total || 1)) * (mediaDiaria * diasRestantes)
+    const totalDiasMes = new Date(anoProj, mes + 1, 0).getDate()
 
-    return { total, concluidas, pendentes, canceladas, fatDia, fatMes, fatAno, ticket, maisVendido, melhor, fatMensal, servCount, diaAtual, totalDiasMes, diasRestantes, mediaDiaria, projecaoTotal, projecaoFat }
-  }, [vendas, mesSelecionado])
+    // Conta dias úteis passados e restantes no mês
+    let diasUteisPastados = 0
+    let diasUteisRestantes = 0
+    for (let d = 1; d <= totalDiasMes; d++) {
+      const diaSemana = new Date(anoProj, mes, d).getDay() // 0=dom, 6=sab
+      const ehUtil = trabalhaDomingo ? diaSemana !== 6 : diaSemana !== 0 && diaSemana !== 6
+      if (d <= diaAtual) { if (ehUtil) diasUteisPastados++ }
+      else { if (ehUtil) diasUteisRestantes++ }
+    }
+
+    const mediaDiaria = diasUteisPastados > 0 ? total / diasUteisPastados : 0
+    const projecaoTotal = Math.round(total + mediaDiaria * diasUteisRestantes)
+    const projecaoFat = fatMes + (fatMes / (total || 1)) * (mediaDiaria * diasUteisRestantes)
+
+    return { total, concluidas, pendentes, canceladas, fatDia, fatMes, fatAno, ticket, maisVendido, melhor, fatMensal, servCount, diaAtual, totalDiasMes, diasUteisPastados, diasUteisRestantes, mediaDiaria, projecaoTotal, projecaoFat }
+  }, [vendas, mesSelecionado, trabalhaDomingo])
 
   const commissionList = useMemo(() => {
     return vendedores.map(v => {
@@ -163,7 +182,22 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
                 📈 Projeção de Fechamento — {mesLabel(mesSelecionado)}
               </div>
               <div style={{ fontSize: 13, color: 'rgba(255,255,255,0.6)' }}>
-                Dia {dash.diaAtual} de {dash.totalDiasMes} · Média de {dash.mediaDiaria.toFixed(1)} TMO/dia · {dash.diasRestantes} dias restantes
+                {dash.diasUteisPastados} dias úteis passados · Média de {dash.mediaDiaria.toFixed(1)} TMO/dia · {dash.diasUteisRestantes} dias úteis restantes
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                <span style={{ fontSize: 11, color: 'rgba(255,255,255,0.4)' }}>Trabalha aos domingos?</span>
+                <button
+                  onClick={() => toggleDomingo(true)}
+                  style={{ padding: '3px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                    background: trabalhaDomingo ? '#38bdf8' : 'rgba(255,255,255,0.08)',
+                    color: trabalhaDomingo ? '#0f172a' : 'rgba(255,255,255,0.5)' }}
+                >Sim</button>
+                <button
+                  onClick={() => toggleDomingo(false)}
+                  style={{ padding: '3px 10px', borderRadius: 6, border: 'none', cursor: 'pointer', fontSize: 11, fontWeight: 700,
+                    background: !trabalhaDomingo ? '#38bdf8' : 'rgba(255,255,255,0.08)',
+                    color: !trabalhaDomingo ? '#0f172a' : 'rgba(255,255,255,0.5)' }}
+                >Não</button>
               </div>
             </div>
             <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
