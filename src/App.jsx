@@ -149,7 +149,7 @@ export default function App() {
           />
         )}
         {panel === 'ranking' && <Ranking vendas={vendas} vendedores={vendedores} />}
-        {panel === 'relatorios' && <Relatorios vendas={vendas} vendedores={vendedores} servicos={servicos} notify={notify} />}
+        {panel === 'relatorios' && <Relatorios vendas={vendas} vendedores={vendedores} servicos={servicos} notify={notify} clienteNome={cliente.nome} />}
       </main>
 
       {vendaModalOpen && (
