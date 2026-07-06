@@ -80,9 +80,9 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
       return vendas.filter(v => v.data.startsWith(key) && v.status !== 'Cancelado').reduce((s, v) => s + v.valor, 0)
     })
     // Projeção de fechamento do mês
-    const hoje = new Date()
-    const diaAtual = hoje.getDate()
-    const totalDiasMes = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate()
+    const hojeDate = new Date()
+    const diaAtual = hojeDate.getDate()
+    const totalDiasMes = new Date(hojeDate.getFullYear(), hojeDate.getMonth() + 1, 0).getDate()
     const diasUteis = diaAtual // simplificado: dias corridos passados
     const diasRestantes = totalDiasMes - diaAtual
     const mediaDiaria = diasUteis > 0 ? total / diasUteis : 0
