@@ -92,12 +92,12 @@ export default function Vendas({ vendas, vendedores, onNovaVenda, onEditVenda, o
             <thead>
               <tr>
                 <th>OS Nº</th><th>Data</th><th>Cliente Final</th><th>Placa</th><th>Serviço</th>
-                <th>Valor</th><th>Vendedor</th><th>Pagamento</th><th>Status</th><th>Ações</th>
+                <th>Valor</th><th>Vendedor</th><th>Aplicador</th><th>Pagamento</th><th>Status</th><th>Ações</th>
               </tr>
             </thead>
             <tbody>
               {filtered.length === 0 ? (
-                <tr><td colSpan={10} style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>
+                <tr><td colSpan={11} style={{ textAlign: 'center', color: '#94a3b8', padding: '2rem' }}>
                   {mesF ? `Nenhuma TMO/Venda em ${mesLabel(mesF)}.` : 'Nenhuma TMO/Venda encontrada.'}
                 </td></tr>
               ) : filtered.map(v => (
@@ -109,6 +109,7 @@ export default function Vendas({ vendas, vendedores, onNovaVenda, onEditVenda, o
                   <td>{v.servico}</td>
                   <td><b>R$ {fmt(v.valor)}</b></td>
                   <td>{v.vendedor}</td>
+                  <td>{v.aplicador || <span style={{color:"rgba(255,255,255,0.2)"}}>—</span>}</td>
                   <td>{v.pgto}</td>
                   <td><Badge status={v.status} /></td>
                   <td>
