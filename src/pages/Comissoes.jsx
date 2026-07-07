@@ -12,6 +12,56 @@ function mesLabel(mes) {
   return MESES[Number(m) - 1] + '/' + ano
 }
 
+
+function CargoBadge({ cargo }) {
+  if (cargo === 'Vendedor/Atendente') return <span className="badge badge-warning" style={{fontSize:10}}>{cargo}</span>
+  if (cargo === 'Aplicador/Mecânico') return <span className="badge badge-success" style={{fontSize:10}}>{cargo}</span>
+  if (cargo === 'Vendedor e Aplicador') return <span className="badge" style={{background:'rgba(139,92,246,0.15)',color:'#a78bfa',border:'1px solid rgba(139,92,246,0.3)',fontSize:10}}>{cargo}</span>
+  return null
+}
+
+function ComissaoForm({ editing, vendedores, onSave, onClose, saving }) {
+  const [vendedor, setVendedor] = useState(editing?.vendedor || '')
+  const [valor, setValor] = useState(editing?.valor || '')
+  const vendSelecionado = vendedores.find(v => v.nome === vendedor)
+
+  return (
+    <>
+      <div className="form-group">
+        <label>Vendedor / Aplicador</label>
+        <select value={vendedor} onChange={e => setVendedor(e.target.value)} disabled={!!editing}>
+          <option value="">Selecione...</option>
+          {vendedores.map(v => (
+            <option key={v.id} value={v.nome}>
+              {v.nome}{v.cargo ? ' — ' + v.cargo : ''}
+            </option>
+          ))}
+        </select>
+        {vendSelecionado?.cargo && (
+          <div style={{ marginTop: 6, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.4)' }}>Cargo:</span>
+            <CargoBadge cargo={vendSelecionado.cargo} />
+          </div>
+        )}
+      </div>
+      <div className="form-group">
+        <label>Valor Fixo por TMO/Venda (R$)</label>
+        <input
+          type="number" min="0" step="0.01"
+          value={valor} onChange={e => setValor(e.target.value)}
+          placeholder="Ex: 7.50"
+        />
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
+        <button className="btn" onClick={onClose}>Cancelar</button>
+        <button className="btn btn-primary" disabled={saving} onClick={() => onSave({ vendedor, valor })}>
+          <i className="fas fa-save"></i> {saving ? 'Salvando...' : 'Salvar'}
+        </button>
+      </div>
+    </>
+  )
+}
+
 export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, onChanged, notify, clienteId }) {
   const [modal, setModal] = useState(null)
   const [confirmId, setConfirmId] = useState(null)
@@ -194,17 +244,23 @@ export default function Comissoes({ comissoes, vendedores, vendas, fechamentos, 
       </div>
 
       {modal && (
-        <SimpleModal
-          title={modal.editing ? 'Editar Comissão' : 'Definir Comissão'}
-          fields={[
-            { key: 'vendedor', label: 'Vendedor', type: 'select', options: vendedores.map(v => v.nome) },
-            { key: 'valor', label: 'Valor Fixo por TMO/Venda (R$)', type: 'number' },
-          ]}
-          values={modal.editing || {}}
-          onClose={() => setModal(null)}
-          onSave={handleSave}
-          saving={saving}
-        />
+        <div className="modal-overlay">
+          <div className="modal" style={{ width: 420 }}>
+            <div className="modal-header">
+              <div style={{ fontSize: 16, fontWeight: 700 }}>{modal.editing ? 'Editar Comissão' : 'Definir Comissão'}</div>
+              <button className="btn btn-icon" onClick={() => setModal(null)}><i className="fas fa-times"></i></button>
+            </div>
+            <div className="modal-body">
+              <ComissaoForm
+                editing={modal.editing}
+                vendedores={vendedores}
+                onSave={handleSave}
+                onClose={() => setModal(null)}
+                saving={saving}
+              />
+            </div>
+          </div>
+        </div>
       )}
 
       {confirmId && (
