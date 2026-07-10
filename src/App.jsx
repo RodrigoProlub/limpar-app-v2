@@ -6,7 +6,6 @@ import AdminDashboard from './pages/AdminDashboard'
 import AdminVisitas from './pages/AdminVisitas'
 import AdminBenchmark from './pages/AdminBenchmark'
 import Dashboard from './pages/Dashboard'
-import Dashboard from './pages/Dashboard'
 import Vendas from './pages/Vendas'
 import Vendedores from './pages/Vendedores'
 import Servicos from './pages/Servicos'
@@ -80,6 +79,9 @@ export default function App() {
   return <AdminVisitas />
 }
 
+  if (path === 'admin/benchmark') {
+    return <AdminBenchmark />
+  }
   if (clienteLoading) {
     return <div style={{ padding: '3rem', textAlign: 'center' }}>Carregando...</div>
   }
