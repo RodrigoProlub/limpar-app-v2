@@ -78,10 +78,10 @@ export default function App() {
   if (path === 'admin/visitas') {
   return <AdminVisitas />
 }
-
   if (path === 'admin/benchmark') {
     return <AdminBenchmark />
   }
+
   if (clienteLoading) {
     return <div style={{ padding: '3rem', textAlign: 'center' }}>Carregando...</div>
   }
