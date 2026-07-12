@@ -1,5 +1,6 @@
 import { useMemo, useRef, useEffect, useState } from 'react'
 import Chart from 'chart.js/auto'
+import { supabase } from '../supabaseClient'
 
 function fmt(n) {
   return Number(n || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -44,7 +45,7 @@ function DoughnutChart({ labels, values }) {
   return <div style={{ position: 'relative', height: 240 }}><canvas ref={ref}></canvas></div>
 }
 
-export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }) {
+function Dashboard({ vendas = [], vendedores = [], comissoes = [], onNovaVenda }) {
   const mesAtual = new Date().toISOString().slice(0, 7)
   const [mesSelecionado, setMesSelecionado] = useState(mesAtual)
   const [trabalhaDomingo, setTrabalhaDomingo] = useState(() => {
@@ -132,9 +133,11 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
 
   return (
     <div>
-      <button className="btn-nova-venda" onClick={onNovaVenda}>
-        <i className="fas fa-plus-circle" style={{ fontSize: 20 }}></i> Registrar Nova TMO/Venda
-      </button>
+      {onNovaVenda && (
+        <button className="btn-nova-venda" onClick={onNovaVenda}>
+          <i className="fas fa-plus-circle" style={{ fontSize: 20 }}></i> Registrar Nova TMO/Venda
+        </button>
+      )}
 
       {/* Seletor de mês */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
@@ -247,6 +250,60 @@ export default function Dashboard({ vendas, vendedores, comissoes, onNovaVenda }
             </div>
           ))}
       </div>
+    </div>
+  )
+}
+
+
+/* ============================================================
+   ADMIN — busca os próprios dados (todas as lojas) e renderiza
+   ============================================================ */
+export default function AdminDashboardPage() {
+  const [vendas, setVendas] = useState([])
+  const [vendedores, setVendedores] = useState([])
+  const [comissoes, setComissoes] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [erro, setErro] = useState(null)
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const [v, vd, co] = await Promise.all([
+          supabase.from('vendas').select('*'),
+          supabase.from('vendedores').select('*'),
+          supabase.from('comissoes').select('*'),
+        ])
+        if (v.error) throw v.error
+        setVendas(v.data || [])
+        setVendedores(vd.data || [])
+        setComissoes(co.data || [])
+      } catch (e) {
+        setErro(e.message || 'Erro ao carregar dados')
+      }
+      setLoading(false)
+    }
+    load()
+  }, [])
+
+  const btn = (href, icon, label) => (
+    <a href={href} style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '10px 16px', borderRadius: 10, background: '#FFB000', color: '#141414', fontWeight: 700, fontSize: 13, textDecoration: 'none' }}>
+      <i className={icon}></i> {label}
+    </a>
+  )
+
+  if (loading) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', fontFamily: 'system-ui' }}>Carregando painel admin…</div>
+  if (erro) return <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#dc2626', fontFamily: 'system-ui', padding: 24, textAlign: 'center' }}>Erro ao carregar: {erro}</div>
+
+  return (
+    <div className="app-container" style={{ padding: 'clamp(12px, 3vw, 32px)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12, marginBottom: 18 }}>
+        <h1 style={{ margin: 0, fontSize: 'clamp(18px, 3vw, 24px)', fontWeight: 900 }}>Painel Admin — LimpAr</h1>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          {btn('/admin/visitas', 'fas fa-clipboard-list', 'Visitas')}
+          {btn('/admin/benchmark', 'fas fa-chart-line', 'Benchmark')}
+        </div>
+      </div>
+      <Dashboard vendas={vendas} vendedores={vendedores} comissoes={comissoes} />
     </div>
   )
 }
