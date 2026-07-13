@@ -302,6 +302,7 @@ export default function AdminDashboardPage() {
           {btn('/admin/visitas', 'fas fa-clipboard-list', 'Visitas')}
           {btn('/admin/benchmark', 'fas fa-chart-line', 'Benchmark')}
           {btn('/admin/fluxo', 'fas fa-car', 'Fluxo de Carros')}
+          {btn('/admin/lojas', 'fas fa-store', 'Lojas')}
         </div>
       </div>
       <Dashboard vendas={vendas} vendedores={vendedores} comissoes={comissoes} />
