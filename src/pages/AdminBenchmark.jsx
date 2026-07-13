@@ -18,6 +18,7 @@ const MESES_LABEL = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Se
 const brl = v => 'R$ ' + Math.round(Number(v || 0)).toLocaleString('pt-BR')
 const pct = v => (v > 0 ? '+' : '') + Math.round(v) + '%'
 const avg = a => (a.length ? a.reduce((s, x) => s + x, 0) / a.length : 0)
+const slug = s => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toUpperCase().replace(/[^A-Z0-9]/g, '')
 const mesLabel = key => { const [a, m] = key.split('-'); return MESES_LABEL[Number(m) - 1] + '/' + a.slice(2) }
 
 function Ruler({ value, series }) {
@@ -77,17 +78,23 @@ function ChartBox({ build, deps, height = 260 }) {
 export default function AdminBenchmark() {
   const [vendas, setVendas] = useState([])
   const [clientes, setClientes] = useState([])
+  const [carteira, setCarteira] = useState([])
+  const [fluxo, setFluxo] = useState([])
   const [loading, setLoading] = useState(true)
   const [idx, setIdx] = useState(0)
 
   useEffect(() => {
     async function load() {
-      const [v, c] = await Promise.all([
-        supabase.from('vendas').select('cliente_id, data, servico, status, valor'),
+      const [v, c, cc, fl] = await Promise.all([
+        supabase.from('vendas').select('cliente, cliente_id, data, servico, status, valor'),
         supabase.from('clientes').select('*'),
+        supabase.from('carteira_clientes').select('id, nome'),
+        supabase.from('fluxo_lojas').select('carteira_cliente_id, mes, carros'),
       ])
       if (v.data) setVendas(v.data.filter(x => x.status !== 'Cancelado' && x.data))
       if (c.data) setClientes(c.data)
+      if (cc.data) setCarteira(cc.data)
+      if (fl.data) setFluxo(fl.data)
       setLoading(false)
     }
     load()
@@ -98,6 +105,20 @@ export default function AdminBenchmark() {
     clientes.forEach(c => { map[c.id] = c.nome || c.codigo || ('Loja ' + c.id) })
     return map
   }, [clientes])
+
+  // liga o texto livre de vendas.cliente com carteira_clientes pelo nome normalizado
+  const carteiraPorNome = useMemo(() => {
+    const map = {}
+    carteira.forEach(c => { map[slug(c.nome)] = c.id })
+    return map
+  }, [carteira])
+
+  // fluxo indexado: { 'carteiraId|YYYY-MM': carros }
+  const fluxoMap = useMemo(() => {
+    const map = {}
+    fluxo.forEach(f => { map[f.carteira_cliente_id + '|' + f.mes] = f.carros })
+    return map
+  }, [fluxo])
 
   // Últimos 6 meses com movimento (ou menos, se o histórico for curto)
   const meses = useMemo(() => {
@@ -110,22 +131,38 @@ export default function AdminBenchmark() {
   const agg = useMemo(() => {
     const porMes = meses.map(() => ({ rev: 0, qtd: 0, lojas: new Set() }))
     const porServico = {}
-    const porLoja = {}
+    const porLoja = {}   // chave = nome da loja (texto de vendas.cliente)
     vendas.forEach(v => {
       const mi = meses.indexOf(v.data.slice(0, 7))
       if (mi === -1) return
       const val = Number(v.valor || 0)
+      const loja = v.cliente || 'Sem loja'
       porMes[mi].rev += val
       porMes[mi].qtd += 1
-      porMes[mi].lojas.add(v.cliente_id)
+      porMes[mi].lojas.add(loja)
       const s = v.servico || 'Outros'
       if (!porServico[s]) porServico[s] = meses.map(() => 0)
       porServico[s][mi] += val
-      if (!porLoja[v.cliente_id]) porLoja[v.cliente_id] = meses.map(() => 0)
-      porLoja[v.cliente_id][mi] += val
+      if (!porLoja[loja]) porLoja[loja] = { rev: meses.map(() => 0), qtd: meses.map(() => 0) }
+      porLoja[loja].rev[mi] += val
+      porLoja[loja].qtd[mi] += 1
     })
-    return { porMes, porServico, porLoja }
-  }, [vendas, meses])
+
+    // carros por mês = soma do fluxo apenas das lojas que tiveram serviço no mês
+    const carrosMes = meses.map((m, mi) => {
+      let soma = 0
+      Object.keys(porLoja).forEach(loja => {
+        if (porLoja[loja].qtd[mi] > 0) {
+          const cid = carteiraPorNome[slug(loja)]
+          if (cid) soma += Number(fluxoMap[cid + '|' + m] || 0)
+        }
+      })
+      return soma
+    })
+    const servicosMes = meses.map((_, mi) => porMes[mi].qtd)
+
+    return { porMes, porServico, porLoja, carrosMes, servicosMes }
+  }, [vendas, meses, carteiraPorNome, fluxoMap])
 
   if (loading) return <div style={{ minHeight: '100vh', background: T.bg, color: T.sub, display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: 'system-ui' }}>Carregando benchmark…</div>
 
@@ -143,12 +180,16 @@ export default function AdminBenchmark() {
   const lojasS = agg.porMes.map(d => d.lojas.size)
   const ticketS = agg.porMes.map(d => (d.lojas.size ? d.rev / d.lojas.size : 0))
   const medioS = agg.porMes.map(d => (d.qtd ? d.rev / d.qtd : 0))
+  // aproveitamento = serviços feitos ÷ carros que passaram (só lojas com fluxo lançado)
+  const aprovS = meses.map((_, i) => (agg.carrosMes[i] ? (100 * agg.servicosMes[i]) / agg.carrosMes[i] : 0))
+  const temFluxo = agg.carrosMes.some(c => c > 0)
   const revBench = avg(revS)
 
   const servicosOrd = Object.entries(agg.porServico).sort((a, b) => avg(b[1]) * b[1].length - avg(a[1]) * a[1].length)
-  const revMaxLoja = Math.max(...Object.values(agg.porLoja).map(s => Math.max(...s)), 1)
+  const revMaxLoja = Math.max(...Object.values(agg.porLoja).map(o => Math.max(...o.rev)), 1)
 
-  const ranking = Object.entries(agg.porLoja).map(([cid, serie]) => {
+  const ranking = Object.entries(agg.porLoja).map(([loja, o]) => {
+    const serie = o.rev
     const cur = serie[idx]
     const prev = idx > 0 ? serie[idx - 1] : 0
     const first = serie.findIndex(v => v > 0)
@@ -159,8 +200,15 @@ export default function AdminBenchmark() {
     else if (cur > prev) { status = 'subindo'; cor = T.up }
     else if (cur < prev) { status = 'caindo'; cor = T.down }
     else { status = 'estável'; cor = T.sub }
-    return { cid, nome: nomeCliente[cid] || cid, serie, cur, status, cor }
+    // aproveitamento da loja no mês
+    const cid = carteiraPorNome[slug(loja)]
+    const carros = cid ? Number(fluxoMap[cid + '|' + meses[idx]] || 0) : 0
+    const servicos = o.qtd[idx]
+    const aprov = carros > 0 ? (100 * servicos) / carros : null
+    return { loja, nome: loja, serie, cur, status, cor, carros, servicos, aprov, semCadastro: !cid }
   }).sort((a, b) => b.cur - a.cur)
+
+  const aprovOrd = ranking.filter(r => r.aprov !== null && r.servicos > 0).sort((a, b) => b.aprov - a.aprov)
 
   return (
     <div style={{ minHeight: '100vh', background: T.bg, color: T.txt, fontFamily: 'system-ui, sans-serif', padding: '24px clamp(12px, 3vw, 40px) 60px' }}>
@@ -189,6 +237,15 @@ export default function AdminBenchmark() {
         <Kpi label="Lojas ativas" series={lojasS} idx={idx} fmt={v => Math.round(v)} />
         <Kpi label="Ticket médio · loja" series={ticketS} idx={idx} fmt={brl} />
         <Kpi label="Valor médio · TMO" series={medioS} idx={idx} fmt={v => 'R$ ' + Number(v).toFixed(0)} />
+        {temFluxo
+          ? <Kpi label="% Aproveitamento" series={aprovS} idx={idx} fmt={v => Number(v).toFixed(1) + '%'} />
+          : (
+            <a href="/admin/fluxo" style={{ background: T.panel, border: `1px dashed ${T.amber}66`, borderRadius: 14, padding: '16px 18px', textDecoration: 'none', display: 'block' }}>
+              <div style={{ fontSize: 11, letterSpacing: '0.08em', textTransform: 'uppercase', color: T.amber, fontWeight: 600 }}>% Aproveitamento</div>
+              <div style={{ fontSize: 15, fontWeight: 800, color: T.txt, marginTop: 8, lineHeight: 1.3 }}>Lançar fluxo de carros →</div>
+              <div style={{ fontSize: 11.5, color: T.sub, marginTop: 6 }}>Sem o fluxo mensal, não dá para calcular o aproveitamento.</div>
+            </a>
+          )}
       </section>
 
       <section style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 14, padding: '18px 14px 10px', marginTop: 16 }}>
@@ -236,6 +293,35 @@ export default function AdminBenchmark() {
         })} />
       </section>
 
+      {/* APROVEITAMENTO POR LOJA */}
+      {aprovOrd.length > 0 && (
+        <section style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 14, padding: 18, marginTop: 16 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 6 }}>
+            <div style={{ fontWeight: 900, fontSize: 15 }}>Aproveitamento por loja — {mesLabel(meses[idx])}</div>
+            <a href="/admin/fluxo" style={{ fontSize: 12, color: T.amber, textDecoration: 'none', fontWeight: 700 }}>Lançar fluxo →</a>
+          </div>
+          <div style={{ fontSize: 12, color: T.sub, marginBottom: 14 }}>
+            serviços feitos ÷ carros que passaram · média geral: <strong style={{ color: T.txt }}>{aprovS[idx].toFixed(1)}%</strong>
+          </div>
+          <div style={{ display: 'grid', gap: 8 }}>
+            {aprovOrd.map(r => {
+              const escala = Math.max(...aprovOrd.map(x => x.aprov), 1)
+              const acima = r.aprov >= aprovS[idx]
+              return (
+                <div key={r.loja} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1.4fr) 2fr auto auto', alignItems: 'center', gap: 12, padding: '8px 10px', borderRadius: 10, background: T.panel2, border: `1px solid ${T.line}` }}>
+                  <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.nome}</div>
+                  <div style={{ height: 8, borderRadius: 4, background: T.line, position: 'relative' }}>
+                    <div style={{ position: 'absolute', inset: 0, width: (r.aprov / escala) * 100 + '%', borderRadius: 4, background: acima ? `linear-gradient(90deg, ${T.up}66, ${T.up})` : `linear-gradient(90deg, ${T.down}66, ${T.down})` }} />
+                  </div>
+                  <div style={{ fontSize: 11, color: T.sub, minWidth: 92, textAlign: 'right' }}>{r.servicos} / {r.carros.toLocaleString('pt-BR')} carros</div>
+                  <div style={{ fontWeight: 900, fontSize: 14, minWidth: 56, textAlign: 'right', color: acima ? T.up : T.down }}>{r.aprov.toFixed(1)}%</div>
+                </div>
+              )
+            })}
+          </div>
+        </section>
+      )}
+
       <section style={{ background: T.panel, border: `1px solid ${T.line}`, borderRadius: 14, padding: 18, marginTop: 16 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 8, marginBottom: 14 }}>
           <div style={{ fontWeight: 900, fontSize: 15 }}>Ranking de lojas — {mesLabel(meses[idx])}</div>
@@ -243,10 +329,16 @@ export default function AdminBenchmark() {
         </div>
         <div style={{ display: 'grid', gap: 8 }}>
           {ranking.map(r => (
-            <div key={r.cid} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1.4fr) 2fr auto auto', alignItems: 'center', gap: 12, padding: '8px 10px', borderRadius: 10, background: r.cur > 0 ? T.panel2 : 'transparent', border: `1px solid ${r.cur > 0 ? T.line : 'transparent'}` }}>
-              <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: r.cur > 0 ? T.txt : T.sub }}>{r.nome}</div>
+            <div key={r.loja} style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 1.4fr) 2fr auto auto auto', alignItems: 'center', gap: 12, padding: '8px 10px', borderRadius: 10, background: r.cur > 0 ? T.panel2 : 'transparent', border: `1px solid ${r.cur > 0 ? T.line : 'transparent'}` }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 12.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: r.cur > 0 ? T.txt : T.sub }}>{r.nome}</div>
+                {r.semCadastro && <div style={{ fontSize: 10, color: T.sub }}>sem par na carteira</div>}
+              </div>
               <div style={{ height: 8, borderRadius: 4, background: T.line, position: 'relative' }}>
                 <div style={{ position: 'absolute', inset: 0, width: (r.cur / revMaxLoja) * 100 + '%', borderRadius: 4, background: r.cur > 0 ? `linear-gradient(90deg, ${T.amber}66, ${T.amber})` : 'transparent' }} />
+              </div>
+              <div style={{ fontSize: 11, fontWeight: 700, minWidth: 46, textAlign: 'right', color: r.aprov !== null ? (r.aprov >= aprovS[idx] ? T.up : T.down) : T.line }}>
+                {r.aprov !== null ? r.aprov.toFixed(1) + '%' : '—'}
               </div>
               <div style={{ fontWeight: 900, fontSize: 13, minWidth: 74, textAlign: 'right', color: r.cur > 0 ? T.txt : T.sub }}>{brl(r.cur)}</div>
               <span style={{ fontSize: 10.5, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', padding: '3px 9px', borderRadius: 999, background: r.cor + '22', color: r.cor, minWidth: 60, textAlign: 'center' }}>{r.status}</span>
@@ -258,6 +350,7 @@ export default function AdminBenchmark() {
       <footer style={{ marginTop: 18, fontSize: 11, color: T.sub, lineHeight: 1.6 }}>
         Fonte: tabela <code>vendas</code> (status ≠ Cancelado), agrupada por mês. Benchmark = média simples dos últimos {meses.length} meses.
         Ticket médio = faturamento ÷ lojas ativas no mês. Valor médio = faturamento ÷ quantidade de TMO/vendas.
+        Aproveitamento = serviços feitos ÷ carros que passaram (fluxo lançado em /admin/fluxo); considera apenas lojas com fluxo informado no mês.
       </footer>
     </div>
   )
