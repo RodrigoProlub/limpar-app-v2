@@ -6,6 +6,7 @@ import AdminDashboard from './pages/AdminDashboard'
 import AdminVisitas from './pages/AdminVisitas'
 import AdminBenchmark from './pages/AdminBenchmark'
 import AdminFluxo from './pages/AdminFluxo'
+import AdminLojas from './pages/AdminLojas'
 import Dashboard from './pages/Dashboard'
 import Vendas from './pages/Vendas'
 import Vendedores from './pages/Vendedores'
@@ -84,6 +85,9 @@ export default function App() {
   }
   if (path === 'admin/fluxo') {
     return <AdminFluxo />
+  }
+  if (path === 'admin/lojas') {
+    return <AdminLojas />
   }
 
   if (clienteLoading) {
