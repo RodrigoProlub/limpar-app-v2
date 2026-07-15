@@ -7,6 +7,8 @@ import AdminVisitas from './pages/AdminVisitas'
 import AdminBenchmark from './pages/AdminBenchmark'
 import AdminFluxo from './pages/AdminFluxo'
 import AdminLojas from './pages/AdminLojas'
+import AdminFaturamento from './pages/AdminFaturamento'
+import FaturamentoClientes from './pages/FaturamentoClientes'
 import Dashboard from './pages/Dashboard'
 import Vendas from './pages/Vendas'
 import Vendedores from './pages/Vendedores'
@@ -25,6 +27,8 @@ const NAV = [
   { id: 'comissoes', label: 'Comissões', icon: 'fa-money-bill-wave' },
   { id: 'ranking', label: 'Ranking Vendedores', icon: 'fa-trophy' },
   { id: 'relatorios', label: 'Relatórios', icon: 'fa-file-chart-column' },
+  { id: 'faturamento', label: 'Faturamento & Bonificação', icon: 'fa-file-invoice-dollar' },
+  { id: 'faturamento-clientes', label: 'Faturamento por Cliente', icon: 'fa-file-export' },
 ]
 
 export default function App() {
@@ -158,6 +162,8 @@ export default function App() {
           <Comissoes
             comissoes={comissoes} vendedores={vendedores} vendas={vendas} fechamentos={fechamentos}
             onChanged={loadAll} notify={notify} clienteId={cliente.id}
+            {panel === 'faturamento' && <AdminFaturamento />}
+        {panel === 'faturamento-clientes' && <FaturamentoClientes />}
           />
         )}
         {panel === 'ranking' && <Ranking vendas={vendas} vendedores={vendedores} />}
