@@ -11,71 +11,71 @@ import * as XLSX from 'xlsx'
 // A senha unica fixa deu lugar ao login por vendedor (tabela carteira_vendedores)
 
 const COR = {
-  ink: '#14181F',
-  inkSoft: '#1E2430',
-  paper: '#14161C',
-  paperRaised: '#1A1D26',
-  line: 'rgba(212,175,55,0.18)',
+  ink: '#0B0F1A',
+  inkSoft: '#111827',
+  paper: '#0D1420',
+  paperRaised: '#141C2E',
+  line: 'rgba(56,189,248,0.18)',
   lineSoft: 'rgba(255,255,255,0.08)',
-  amber: '#D4AF37',
-  amberDeep: '#E8C86A',
-  textPrimary: '#F5F1E8',
-  textSecondary: '#9A9488',
-  textOnInk: '#F6F4EF',
-  textOnInkSoft: '#9CA3AF',
+  amber: '#22B8F0',
+  amberDeep: '#7DD3FC',
+  textPrimary: '#F3F6FB',
+  textSecondary: '#8B93A7',
+  textOnInk: '#F3F6FB',
+  textOnInkSoft: '#9CA6BC',
 }
 
 // Paleta "Premium" - agora aplicada em todo o app. Mantida separada dos
 // tokens COR acima porque o cabeçalho/nav usam gradiente e brilho próprios
 // que não fazem sentido como tokens de card comuns.
 const PREM = {
-  bgPage: '#101115',
-  glass: 'rgba(26,29,38,0.78)',
-  glassBorder: 'rgba(212,175,55,0.16)',
-  gold: '#D4AF37',
-  goldSoft: '#E8C86A',
-  goldOn: '#1C1A14',
+  bgPage: '#0B0F1A',
+  glass: 'rgba(19,26,42,0.78)',
+  glassBorder: 'rgba(56,189,248,0.16)',
+  gold: '#22B8F0',
+  goldSoft: '#7DD3FC',
+  goldOn: '#0F1626',
 }
 
 const DIAS = ['SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA']
 
 const LINHA_DIA = {
-  SEGUNDA: { cor: '#3E6E91', nome: 'Linha Segunda' },
-  TERÇA: { cor: '#6B7F3F', nome: 'Linha Terça' },
-  QUARTA: { cor: '#B6862F', nome: 'Linha Quarta' },
-  QUINTA: { cor: '#8C3F4F', nome: 'Linha Quinta' },
-  SEXTA: { cor: '#5B5285', nome: 'Linha Sexta' },
+  SEGUNDA: { cor: '#38BDF8', nome: 'Linha Segunda' },
+  TERÇA: { cor: '#2DD4BF', nome: 'Linha Terça' },
+  QUARTA: { cor: '#FBBF24', nome: 'Linha Quarta' },
+  QUINTA: { cor: '#F87171', nome: 'Linha Quinta' },
+  SEXTA: { cor: '#F472B6', nome: 'Linha Sexta' },
 }
 
 const RODIZIO_INFO = {
-  Fora: { cor: '#3F6B4D', label: 'Fora do anel' },
-  Dentro: { cor: '#8C3F4F', label: 'Dentro do anel' },
-  Confirmar: { cor: '#B6862F', label: 'Confirmar' },
+  Fora: { cor: '#34D399', label: 'Fora do anel' },
+  Dentro: { cor: '#F87171', label: 'Dentro do anel' },
+  Confirmar: { cor: '#FBBF24', label: 'Confirmar' },
 }
 
 const STATUS_INFO = {
-  Visitado: { cor: '#3F6B4D', label: 'Visitado' },
-  Pendente: { cor: '#B6862F', label: 'Pendente' },
-  Reagendado: { cor: '#A0622E', label: 'Reagendado' },
-  Cancelado: { cor: '#8C3F4F', label: 'Cancelado' },
+  Visitado: { cor: '#34D399', label: 'Visitado' },
+  Pendente: { cor: '#FBBF24', label: 'Pendente' },
+  Reagendado: { cor: '#FB923C', label: 'Reagendado' },
+  Cancelado: { cor: '#F87171', label: 'Cancelado' },
 }
 
 const SITUACAO_INFO = {
-  Ativo: { cor: '#3F6B4D', label: 'Ativo' },
-  'Prospecção': { cor: '#3E6E91', label: 'Prospecção' },
-  Inativo: { cor: '#8A8377', label: 'Inativo' },
+  Ativo: { cor: '#34D399', label: 'Ativo' },
+  'Prospecção': { cor: '#38BDF8', label: 'Prospecção' },
+  Inativo: { cor: '#6B7280', label: 'Inativo' },
 }
 const SITUACOES = ['Ativo', 'Prospecção', 'Inativo']
 
 function FontLoader() {
   return (
     <style>{`
-      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Fraunces:wght@600;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
+      @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500&display=swap');
       * { box-sizing: border-box; }
       body { margin: 0; }
       .av-root, .av-root * { font-family: 'Inter', system-ui, sans-serif; }
       .av-display { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; }
-      .av-serif { font-family: 'Fraunces', serif; }
+      .av-serif { font-family: 'Space Grotesk', 'Inter', system-ui, sans-serif; }
       .av-mono { font-family: 'IBM Plex Mono', monospace; }
       .av-root ::selection { background: ${COR.amber}; color: ${COR.ink}; }
       .av-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -124,7 +124,7 @@ function Painel({ children, style }) {
 function Botao({ children, onClick, variant = 'primary', disabled, type, style }) {
   const variants = {
     primary: { background: COR.ink, color: COR.textOnInk, border: `1px solid ${COR.ink}` },
-    amber: { background: COR.amber, color: COR.ink, border: `1px solid ${COR.amber}` },
+    amber: { background: `linear-gradient(135deg, ${COR.amberDeep} 0%, ${COR.amber} 55%, #0B8FD1 100%)`, color: '#FFFFFF', border: `1px solid ${COR.amber}` },
     ghost: { background: 'transparent', color: COR.textPrimary, border: `1px solid ${COR.line}` },
   }
   return (
@@ -1214,12 +1214,12 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
     const listaExibicao = [...ordenados, ...semCoord]
 
     return (
-      <div key={d} style={{ padding: '0 10px', borderLeft: comBorda ? '1px solid rgba(212,175,55,0.14)' : 'none', minWidth: 0 }}>
+      <div key={d} style={{ padding: '0 10px', borderLeft: comBorda ? '1px solid rgba(56,189,248,0.14)' : 'none', minWidth: 0 }}>
         <div style={{ marginBottom: 14 }}>
-          <div className="av-serif" style={{ fontSize: 17, fontWeight: 700, color: '#F5F1E8' }}>
+          <div className="av-serif" style={{ fontSize: 17, fontWeight: 700, color: '#F3F6FB' }}>
             {d}
           </div>
-          <div style={{ fontSize: 11.5, color: '#9A9488', marginTop: 3 }}>
+          <div style={{ fontSize: 11.5, color: '#8B93A7', marginTop: 3 }}>
             {lista.length} {lista.length === 1 ? 'parada' : 'paradas'}
             {comCoord.length > 0 && comCoord.length < lista.length && <> · {comCoord.length} no mapa</>}
           </div>
@@ -1229,7 +1229,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
               style={{
                 border: `1px solid ${PREM.glassBorder}`, background: 'rgba(255,255,255,0.05)',
                 borderRadius: 8, padding: '7px 12px', cursor: 'pointer', fontSize: 11.5,
-                fontWeight: 600, color: '#D9D2C0',
+                fontWeight: 600, color: '#B7C0D4',
               }}
             >
               {mapaAberto ? 'Ocultar mapa' : 'Ver mapa do dia'}
@@ -1239,7 +1239,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                 href={linkRota} target="_blank" rel="noreferrer"
                 style={{
                   display: 'inline-flex', alignItems: 'center', gap: 6,
-                  border: `1px solid ${PREM.gold}`, background: 'rgba(212,175,55,0.10)',
+                  border: `1px solid ${PREM.gold}`, background: 'rgba(56,189,248,0.10)',
                   borderRadius: 8, padding: '7px 12px', fontSize: 11.5, fontWeight: 700,
                   color: PREM.goldSoft, textDecoration: 'none',
                 }}
@@ -1266,14 +1266,14 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
           return (
             <div key={c.id} style={{
               background: PREM.glass, backdropFilter: 'blur(10px)', WebkitBackdropFilter: 'blur(10px)',
-              border: atrasado ? '1px solid rgba(212,90,90,0.45)' : `1px solid ${PREM.glassBorder}`,
+              border: atrasado ? '1px solid rgba(248,113,113,0.45)' : `1px solid ${PREM.glassBorder}`,
               borderRadius: 14, padding: '14px 16px', marginBottom: 12,
               boxShadow: '0 10px 24px -16px rgba(0,0,0,0.45)',
             }}>
               {atrasado && (
                 <div style={{
                   display: 'inline-flex', alignItems: 'center', gap: 5, marginBottom: 8,
-                  background: 'rgba(212,90,90,0.15)', color: '#E39B9B', fontSize: 10.5, fontWeight: 700,
+                  background: 'rgba(248,113,113,0.15)', color: '#FCA5A5', fontSize: 10.5, fontWeight: 700,
                   letterSpacing: '0.03em', textTransform: 'uppercase', padding: '3px 9px', borderRadius: 999,
                 }}>
                   ⚠ {dias} dias sem visita
@@ -1281,8 +1281,8 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
               )}
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
                 <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 14.5, fontWeight: 700, color: '#F5F1E8', lineHeight: 1.3 }}>{c.nome}</div>
-                  <div style={{ fontSize: 11.5, color: '#9A9488', marginTop: 3 }}>{c.bairro}</div>
+                  <div style={{ fontSize: 14.5, fontWeight: 700, color: '#F3F6FB', lineHeight: 1.3 }}>{c.nome}</div>
+                  <div style={{ fontSize: 11.5, color: '#8B93A7', marginTop: 3 }}>{c.bairro}</div>
                 </div>
                 <button
                   onClick={() => abrirModalVisita(c)}
@@ -1315,11 +1315,11 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                 )}
               </div>
 
-              <div style={{ marginTop: 8, fontSize: 11.5, color: '#9A9488', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <div style={{ marginTop: 8, fontSize: 11.5, color: '#8B93A7', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
                 <span>mover p/ <SeletorDia cliente={c} onChange={alterarDia} /></span>
                 <button
                   onClick={() => alterarDia(c.id, 'FORA_DE_ROTA')}
-                  style={{ border: 'none', background: 'none', color: '#9A9488', cursor: 'pointer', fontSize: 11, fontWeight: 600, padding: 0, textDecoration: 'underline' }}
+                  style={{ border: 'none', background: 'none', color: '#8B93A7', cursor: 'pointer', fontSize: 11, fontWeight: 600, padding: 0, textDecoration: 'underline' }}
                 >
                   remover da rota
                 </button>
@@ -1334,7 +1334,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
               {ultima && (
                 <div style={{
                   marginTop: 10, padding: '9px 11px', background: 'rgba(0,0,0,0.22)', borderRadius: 8,
-                  fontSize: 11.5, color: '#B5AF9F', borderLeft: `2px solid ${PREM.gold}`,
+                  fontSize: 11.5, color: '#9CA6BC', borderLeft: `2px solid ${PREM.gold}`,
                 }}>
                   <span className="av-mono">{ultima.data_visita}</span>
                   {ultima.observacao && <> · {ultima.observacao}</>}
@@ -1349,7 +1349,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
           )
         })}
         {lista.length === 0 && (
-          <p style={{ color: '#9A9488', fontSize: 12.5 }}>Sem paradas.</p>
+          <p style={{ color: '#8B93A7', fontSize: 12.5 }}>Sem paradas.</p>
         )}
       </div>
     )
@@ -1416,14 +1416,14 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
         <FontLoader />
         <div style={{
           minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          background: 'linear-gradient(135deg, #14171F 0%, #1C1A14 55%, #3A2E0F 130%)', padding: 20,
+          background: 'linear-gradient(135deg, #0B0F1A 0%, #0F1626 55%, #132A3D 130%)', padding: 20,
         }}>
           <div style={{ width: 360 }}>
             <div style={{ marginBottom: 28, textAlign: 'center' }}>
               <div style={{ color: PREM.gold, fontSize: 13, fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' }}>
                 LimpAr Auto
               </div>
-              <div className="av-serif" style={{ color: '#F5F1E8', fontSize: 26, fontWeight: 700, marginTop: 6 }}>
+              <div className="av-serif" style={{ color: '#F3F6FB', fontSize: 26, fontWeight: 700, marginTop: 6 }}>
                 Carteira de Visitas
               </div>
             </div>
@@ -1444,7 +1444,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                 onKeyDown={(e) => e.key === 'Enter' && entrar()}
               />
               {erroSenha && (
-                <p style={{ color: '#8C3F4F', fontSize: 12.5, marginTop: 8, marginBottom: 0 }}>{erroSenha}</p>
+                <p style={{ color: '#F87171', fontSize: 12.5, marginTop: 8, marginBottom: 0 }}>{erroSenha}</p>
               )}
               <Botao variant="amber" onClick={entrar} disabled={entrando} style={{ width: '100%', marginTop: 16 }}>
                 {entrando ? 'Entrando…' : 'Entrar'}
@@ -1472,7 +1472,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
       <FontLoader />
 
       <header style={{
-        background: 'linear-gradient(135deg, #14171F 0%, #1C1A14 55%, #3A2E0F 130%)',
+        background: 'linear-gradient(135deg, #0B0F1A 0%, #0F1626 55%, #132A3D 130%)',
         padding: '32px 28px 40px', borderRadius: '0 0 24px 24px', position: 'relative', overflow: 'hidden',
       }}>
         <div style={{
@@ -1484,12 +1484,12 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
             <div style={{ color: PREM.gold, fontSize: 11, fontWeight: 700, letterSpacing: '0.16em', textTransform: 'uppercase' }}>
               LimpAr Auto · Base SP
             </div>
-            <div className="av-serif" style={{ color: '#F5F1E8', fontSize: 28, fontWeight: 700, marginTop: 6 }}>
+            <div className="av-serif" style={{ color: '#F3F6FB', fontSize: 28, fontWeight: 700, marginTop: 6 }}>
               Carteira de Visitas
             </div>
           </div>
-          <div className="av-mono" style={{ color: '#B5AF9F', fontSize: 12, textAlign: 'right' }}>
-            <div style={{ color: '#F5F1E8', fontWeight: 700, marginBottom: 4 }}>
+          <div className="av-mono" style={{ color: '#9CA6BC', fontSize: 12, textAlign: 'right' }}>
+            <div style={{ color: '#F3F6FB', fontWeight: 700, marginBottom: 4 }}>
               {vendedor?.nome}
               <button onClick={sair} style={{
                 marginLeft: 12, border: 'none', background: 'none', color: PREM.goldSoft,
@@ -1507,11 +1507,11 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
               key={key}
               onClick={() => setAba(key)}
               style={{
-                border: aba === key ? `1px solid ${PREM.gold}` : '1px solid rgba(212,175,55,0.18)',
+                border: aba === key ? `1px solid ${PREM.gold}` : '1px solid rgba(56,189,248,0.18)',
                 cursor: 'pointer', borderRadius: 999, padding: '9px 16px', whiteSpace: 'nowrap',
                 fontSize: 13, fontWeight: aba === key ? 700 : 600,
                 background: aba === key ? PREM.gold : 'rgba(255,255,255,0.06)',
-                color: aba === key ? PREM.goldOn : '#D9D2C0',
+                color: aba === key ? PREM.goldOn : '#B7C0D4',
               }}
             >
               {label}
@@ -1526,7 +1526,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
             {erro}
           </Painel>
         )}
-        {carregando && <p style={{ color: '#B5AF9F' }}>Carregando carteira…</p>}
+        {carregando && <p style={{ color: '#9CA6BC' }}>Carregando carteira…</p>}
 
         {!carregando && aba === 'hoje' && (() => {
           const diaHoje = diaSemanaHoje()
@@ -1555,7 +1555,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
         {!carregando && aba === 'roteiro' && (
           <>
             <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 14 }}>
-              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#B5AF9F', cursor: 'pointer' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 7, fontSize: 12.5, color: '#9CA6BC', cursor: 'pointer' }}>
                 <input type="checkbox" checked={mostrarInativos} onChange={(e) => setMostrarInativos(e.target.checked)} />
                 Mostrar clientes inativos na rota
               </label>
@@ -1650,7 +1650,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
               {progressoImport.length > 0 && (
                 <div className="av-scroll" style={{ maxHeight: 220, overflowY: 'auto', marginTop: 14, border: `1px solid ${COR.lineSoft}`, borderRadius: 4 }}>
                   {progressoImport.map((p, i) => {
-                    const cor = p.status === 'ok' ? '#3F6B4D' : p.status === 'pulado' ? '#B6862F' : '#8C3F4F'
+                    const cor = p.status === 'ok' ? '#34D399' : p.status === 'pulado' ? '#FBBF24' : '#F87171'
                     return (
                       <div key={i} style={{
                         display: 'flex', justifyContent: 'space-between', gap: 10, padding: '7px 10px',
@@ -1699,7 +1699,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                   {progressoLocalizacao.length > 0 && (
                     <div className="av-scroll" style={{ maxHeight: 220, overflowY: 'auto', marginTop: 14, border: `1px solid ${COR.lineSoft}`, borderRadius: 4 }}>
                       {progressoLocalizacao.map((p, i) => {
-                        const cor = p.status === 'ok' ? '#3F6B4D' : p.status === 'pulado' ? '#B6862F' : '#8C3F4F'
+                        const cor = p.status === 'ok' ? '#34D399' : p.status === 'pulado' ? '#FBBF24' : '#F87171'
                         return (
                           <div key={i} style={{
                             display: 'flex', justifyContent: 'space-between', gap: 10, padding: '7px 10px',
@@ -1762,12 +1762,12 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                 </div>
 
                 {cepEncontrado === false && (
-                  <p style={{ fontSize: 11.5, color: '#B6862F', marginTop: 8, marginBottom: 0 }}>
+                  <p style={{ fontSize: 11.5, color: '#FBBF24', marginTop: 8, marginBottom: 0 }}>
                     CEP não encontrado — preencha o endereço e o bairro manualmente.
                   </p>
                 )}
                 {cepEncontrado === true && (
-                  <p style={{ fontSize: 11.5, color: novoCliente.latitude ? '#3F6B4D' : '#B6862F', marginTop: 8, marginBottom: 0 }}>
+                  <p style={{ fontSize: 11.5, color: novoCliente.latitude ? '#34D399' : '#FBBF24', marginTop: 8, marginBottom: 0 }}>
                     {novoCliente.latitude
                       ? '📍 Endereço e localização encontrados — vai aparecer no mapa.'
                       : 'Endereço encontrado, mas não consegui localizar no mapa — o cliente ainda entra no roteiro normalmente, só não aparece no mapa visual.'}
@@ -2075,9 +2075,9 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 1, marginBottom: 20, background: COR.line, borderRadius: 12, overflow: 'hidden' }}>
               {[
                 ['Total na carteira', clientes.length, COR.amberDeep],
-                ['Visitados na semana', visitadosNaSemana, '#3F6B4D'],
+                ['Visitados na semana', visitadosNaSemana, '#34D399'],
                 ['Repostos no mês', `${repostosNoMes}L`, COR.amberDeep],
-                ['Atrasados (14+ dias)', clientesAtrasados, clientesAtrasados > 0 ? '#C97878' : '#3F6B4D'],
+                ['Atrasados (14+ dias)', clientesAtrasados, clientesAtrasados > 0 ? '#C97878' : '#34D399'],
               ].map(([label, valor, cor]) => (
                 <div key={label} style={{ background: COR.paperRaised, padding: '18px 16px' }}>
                   <div className="av-serif" style={{ fontSize: 26, fontWeight: 700, color: cor }}>{valor}</div>
@@ -2117,26 +2117,26 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                   <>
                     <div style={{ display: 'flex', height: 26, borderRadius: 6, overflow: 'hidden', marginBottom: 12 }}>
                       {rodizioDaCarteira.fora > 0 && (
-                        <div style={{ width: `${(rodizioDaCarteira.fora / rodizioDaCarteira.total) * 100}%`, background: '#3F6B4D' }} />
+                        <div style={{ width: `${(rodizioDaCarteira.fora / rodizioDaCarteira.total) * 100}%`, background: '#34D399' }} />
                       )}
                       {rodizioDaCarteira.dentro > 0 && (
-                        <div style={{ width: `${(rodizioDaCarteira.dentro / rodizioDaCarteira.total) * 100}%`, background: '#8C3F4F' }} />
+                        <div style={{ width: `${(rodizioDaCarteira.dentro / rodizioDaCarteira.total) * 100}%`, background: '#F87171' }} />
                       )}
                       {rodizioDaCarteira.confirmar > 0 && (
-                        <div style={{ width: `${(rodizioDaCarteira.confirmar / rodizioDaCarteira.total) * 100}%`, background: '#B6862F' }} />
+                        <div style={{ width: `${(rodizioDaCarteira.confirmar / rodizioDaCarteira.total) * 100}%`, background: '#FBBF24' }} />
                       )}
                     </div>
                     <div style={{ display: 'flex', gap: 14, fontSize: 11.5, color: COR.textSecondary, flexWrap: 'wrap' }}>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#3F6B4D', display: 'inline-block' }} />
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#34D399', display: 'inline-block' }} />
                         {rodizioDaCarteira.fora} Fora do anel
                       </span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#8C3F4F', display: 'inline-block' }} />
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#F87171', display: 'inline-block' }} />
                         {rodizioDaCarteira.dentro} Dentro do anel
                       </span>
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#B6862F', display: 'inline-block' }} />
+                        <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#FBBF24', display: 'inline-block' }} />
                         {rodizioDaCarteira.confirmar} Confirmar
                       </span>
                     </div>
@@ -2156,7 +2156,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                     const pct = Math.round((p.total / maior) * 100)
                     return (
                       <div key={p.produto} style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
-                        <div style={{ width: 76, fontSize: 11.5, fontWeight: 700, color: '#D9D2C0', flexShrink: 0 }}>{p.produto}</div>
+                        <div style={{ width: 76, fontSize: 11.5, fontWeight: 700, color: '#B7C0D4', flexShrink: 0 }}>{p.produto}</div>
                         <div style={{ flex: 1, height: 14, background: COR.lineSoft, borderRadius: 4, overflow: 'hidden' }}>
                           <div style={{ height: '100%', width: `${pct}%`, background: COR.amber }} />
                         </div>
@@ -2195,12 +2195,12 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
               </div>
 
               {cepPerfilEncontrado === false && (
-                <p style={{ fontSize: 11.5, color: '#B6862F', marginTop: -6, marginBottom: 12 }}>
+                <p style={{ fontSize: 11.5, color: '#FBBF24', marginTop: -6, marginBottom: 12 }}>
                   CEP não encontrado — preencha o endereço manualmente.
                 </p>
               )}
               {cepPerfilEncontrado === true && (
-                <p style={{ fontSize: 11.5, color: perfilForm.latitude_residencial ? '#3F6B4D' : '#B6862F', marginTop: -6, marginBottom: 12 }}>
+                <p style={{ fontSize: 11.5, color: perfilForm.latitude_residencial ? '#34D399' : '#FBBF24', marginTop: -6, marginBottom: 12 }}>
                   {perfilForm.latitude_residencial
                     ? '📍 Endereço e localização encontrados.'
                     : 'Endereço encontrado, mas sem localização exata no mapa.'}
@@ -2232,7 +2232,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                 {salvandoPerfil ? 'Salvando…' : 'Salvar meus dados'}
               </Botao>
               {perfilSalvo && (
-                <span style={{ marginLeft: 12, fontSize: 12.5, color: '#3F6B4D', fontWeight: 600 }}>
+                <span style={{ marginLeft: 12, fontSize: 12.5, color: '#34D399', fontWeight: 600 }}>
                   Salvo!
                 </span>
               )}
@@ -2291,7 +2291,7 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                       <td style={{ padding: '10px 10px 10px 0' }}>{diaRodizioPorPlaca(v.placa) || '—'}</td>
                       <td style={{ padding: '10px 10px 10px 0' }}>{v.admin ? 'Sim' : '—'}</td>
                       <td style={{ padding: '10px 10px 10px 0' }}>
-                        <span style={{ fontSize: 11, fontWeight: 700, color: v.ativo ? '#3F6B4D' : '#8A8377', textTransform: 'uppercase' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: v.ativo ? '#34D399' : '#6B7280', textTransform: 'uppercase' }}>
                           {v.ativo ? 'Ativo' : 'Inativo'}
                         </span>
                       </td>
