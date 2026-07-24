@@ -172,10 +172,16 @@ function Campo({ label, ...props }) {
   )
 }
 
-const DIAS_OPCOES = ['SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'Verificar manualmente']
+const DIAS_OPCOES = ['SEGUNDA', 'TERÇA', 'QUARTA', 'QUINTA', 'SEXTA', 'FORA_DE_ROTA', 'Verificar manualmente']
+
+// Rótulo amigável pra cada opção do seletor de dia — a maioria usa o próprio
+// valor (ex: "SEGUNDA"), mas FORA_DE_ROTA precisa de um texto mais claro.
+const DIA_OPCAO_LABEL = { FORA_DE_ROTA: 'Fora de rota' }
 
 function SeletorDia({ cliente, onChange }) {
-  const cor = LINHA_DIA[cliente.dia_sugerido]?.cor || COR.textSecondary
+  const cor = cliente.dia_sugerido === 'FORA_DE_ROTA'
+    ? COR.textSecondary
+    : (LINHA_DIA[cliente.dia_sugerido]?.cor || COR.textSecondary)
   return (
     <select
       value={cliente.dia_sugerido || 'Verificar manualmente'}
@@ -185,7 +191,7 @@ function SeletorDia({ cliente, onChange }) {
         color: cor, cursor: 'pointer', padding: 0,
       }}
     >
-      {DIAS_OPCOES.map((d) => <option key={d} value={d}>{d}</option>)}
+      {DIAS_OPCOES.map((d) => <option key={d} value={d}>{DIA_OPCAO_LABEL[d] || d}</option>)}
     </select>
   )
 }
@@ -913,6 +919,37 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
     }
   }
 
+  // "Modo original": descarta qualquer ajuste manual (dia movido a mão ou
+  // marcado como fora de rota) e volta a usar exatamente a mesma regra de
+  // zona/dia/rodízio por CEP que roda no cadastro (função
+  // carteira_calcular_zona_dia no banco) - chamamos a mesma função aqui em
+  // vez de duplicar a lógica de agrupamento por região no front-end.
+  async function restaurarPorCep(cliente) {
+    const cepDigitos = (cliente.cep || '').replace(/\D/g, '')
+    if (cepDigitos.length !== 8) {
+      setErro(`${cliente.nome}: esse cliente não tem um CEP de 8 dígitos válido para recalcular.`)
+      return
+    }
+    try {
+      const { data, error } = await supabase.rpc('carteira_calcular_zona_dia', { p_cep: cliente.cep })
+      if (error) throw error
+      const resultado = Array.isArray(data) ? data[0] : data
+      if (!resultado) throw new Error('a função não retornou nenhum resultado')
+      const { zona, dia_sugerido, rodizio } = resultado
+      setClientes((prev) => prev.map((c) => c.id === cliente.id
+        ? { ...c, zona, dia_sugerido, status_rodizio: rodizio }
+        : c))
+      const { error: e2 } = await supabase
+        .from('carteira_clientes')
+        .update({ zona, dia_sugerido, status_rodizio: rodizio })
+        .eq('id', cliente.id)
+      if (e2) throw e2
+    } catch (err) {
+      setErro(`Não consegui restaurar ${cliente.nome} pelo CEP: ` + err.message)
+      await carregarTudo()
+    }
+  }
+
   async function salvarPerfil(e) {
     e.preventDefault()
     setSalvandoPerfil(true)
@@ -1000,12 +1037,14 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
     const map = {}
     for (const d of DIAS) map[d] = []
     const outros = []
+    const foraDeRota = []
     const base = mostrarInativos ? clientes : clientes.filter((c) => (c.situacao || 'Ativo') !== 'Inativo')
     for (const c of base) {
       if (DIAS.includes(c.dia_sugerido)) map[c.dia_sugerido].push(c)
+      else if (c.dia_sugerido === 'FORA_DE_ROTA') foraDeRota.push(c)
       else outros.push(c)
     }
-    return { map, outros }
+    return { map, outros, foraDeRota }
   }, [clientes, mostrarInativos])
 
   const painelPorDia = useMemo(() => DIAS.map((d) => {
@@ -1276,8 +1315,20 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                 )}
               </div>
 
-              <div style={{ marginTop: 8, fontSize: 11.5, color: '#9A9488' }}>
-                mover p/ <SeletorDia cliente={c} onChange={alterarDia} />
+              <div style={{ marginTop: 8, fontSize: 11.5, color: '#9A9488', display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                <span>mover p/ <SeletorDia cliente={c} onChange={alterarDia} /></span>
+                <button
+                  onClick={() => alterarDia(c.id, 'FORA_DE_ROTA')}
+                  style={{ border: 'none', background: 'none', color: '#9A9488', cursor: 'pointer', fontSize: 11, fontWeight: 600, padding: 0, textDecoration: 'underline' }}
+                >
+                  remover da rota
+                </button>
+                <button
+                  onClick={() => restaurarPorCep(c)}
+                  style={{ border: 'none', background: 'none', color: PREM.goldSoft, cursor: 'pointer', fontSize: 11, fontWeight: 600, padding: 0, textDecoration: 'underline' }}
+                >
+                  restaurar por CEP
+                </button>
               </div>
 
               {ultima && (
@@ -1526,10 +1577,42 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                   A CONFIRMAR — CEP AINDA NÃO MAPEADO ({clientesPorDia.outros.length})
                 </div>
                 {clientesPorDia.outros.map((c) => (
-                  <div key={c.id} style={{ padding: '8px 0', borderBottom: `1px solid ${COR.lineSoft}`, fontSize: 13.5 }}>
+                  <div key={c.id} style={{ padding: '8px 0', borderBottom: `1px solid ${COR.lineSoft}`, fontSize: 13.5, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
                     <strong>{c.nome}</strong>
-                    <span className="av-mono" style={{ color: COR.textSecondary, marginLeft: 8 }}>{c.cep}</span>
-                    <span style={{ color: COR.textSecondary, marginLeft: 8 }}>{c.bairro}</span>
+                    <span className="av-mono" style={{ color: COR.textSecondary }}>{c.cep}</span>
+                    <span style={{ color: COR.textSecondary }}>{c.bairro}</span>
+                    <span style={{ marginLeft: 'auto' }}><SeletorDia cliente={c} onChange={alterarDia} /></span>
+                    <button
+                      onClick={() => restaurarPorCep(c)}
+                      style={{ border: 'none', background: 'none', color: COR.amberDeep, cursor: 'pointer', fontSize: 11.5, fontWeight: 600, padding: 0 }}
+                    >
+                      restaurar por CEP
+                    </button>
+                  </div>
+                ))}
+              </Painel>
+            )}
+
+            {clientesPorDia.foraDeRota.length > 0 && (
+              <Painel style={{ marginTop: 20 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.06em', color: COR.textSecondary, marginBottom: 12 }}>
+                  FORA DE ROTA ({clientesPorDia.foraDeRota.length})
+                </div>
+                <p style={{ margin: '0 0 12px', fontSize: 12, color: COR.textSecondary }}>
+                  Clientes removidos manualmente da rota. Continuam na carteira, só não aparecem nos dias da semana.
+                </p>
+                {clientesPorDia.foraDeRota.map((c) => (
+                  <div key={c.id} style={{ padding: '8px 0', borderBottom: `1px solid ${COR.lineSoft}`, fontSize: 13.5, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
+                    <strong>{c.nome}</strong>
+                    <span className="av-mono" style={{ color: COR.textSecondary }}>{c.cep}</span>
+                    <span style={{ color: COR.textSecondary }}>{c.bairro}</span>
+                    <span style={{ marginLeft: 'auto' }}><SeletorDia cliente={c} onChange={alterarDia} /></span>
+                    <button
+                      onClick={() => restaurarPorCep(c)}
+                      style={{ border: 'none', background: 'none', color: COR.amberDeep, cursor: 'pointer', fontSize: 11.5, fontWeight: 600, padding: 0 }}
+                    >
+                      restaurar por CEP
+                    </button>
                   </div>
                 ))}
               </Painel>
@@ -1757,11 +1840,15 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
                           <SeletorSituacao cliente={c} onChange={alterarSituacao} />
                         </td>
                         <td style={{ padding: '10px 10px 10px 0' }}><Etiqueta texto={statusDoCliente(c.id)} info={STATUS_INFO} /></td>
-                        <td style={{ padding: '10px 0' }}>
+                        <td style={{ padding: '10px 0', whiteSpace: 'nowrap' }}>
                           <button onClick={() => abrirModalVisita(c)} style={{
                             border: 'none', background: 'none', color: COR.amberDeep,
                             cursor: 'pointer', fontSize: 12, fontWeight: 600,
                           }}>visitar</button>
+                          <button onClick={() => restaurarPorCep(c)} title="Descarta ajustes manuais e recalcula zona/dia/rodízio pelo CEP" style={{
+                            border: 'none', background: 'none', color: COR.textSecondary,
+                            cursor: 'pointer', fontSize: 12, fontWeight: 600, marginLeft: 10,
+                          }}>restaurar CEP</button>
                         </td>
                       </tr>
                     ))}
