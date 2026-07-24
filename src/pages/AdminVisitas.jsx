@@ -80,6 +80,20 @@ function FontLoader() {
       .av-root ::selection { background: ${COR.amber}; color: ${COR.ink}; }
       .av-scroll::-webkit-scrollbar { width: 8px; height: 8px; }
       .av-scroll::-webkit-scrollbar-thumb { background: ${COR.line}; border-radius: 4px; }
+      .av-tab {
+        position: relative; cursor: pointer; white-space: nowrap; border: none;
+        border-radius: 12px; padding: 12px 20px; font-size: 13.5px; font-weight: 600;
+        font-family: 'Inter', system-ui, sans-serif; transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+        background: rgba(255,255,255,0.05); color: #B7C0D4; border: 1px solid rgba(56,189,248,0.16);
+      }
+      .av-tab:hover { transform: translateY(-2px); background: rgba(56,189,248,0.12); color: #F3F6FB; }
+      .av-tab.is-active {
+        background: linear-gradient(135deg, ${COR.amberDeep} 0%, ${COR.amber} 55%, #0B8FD1 100%);
+        color: #FFFFFF; font-weight: 800; border: 1px solid rgba(255,255,255,0.25);
+        box-shadow: 0 10px 26px -8px rgba(34,184,240,0.65), 0 0 0 1px rgba(34,184,240,0.35);
+        transform: translateY(-2px);
+      }
+      .av-tab.is-active:hover { transform: translateY(-3px); }
     `}</style>
   )
 }
@@ -1501,18 +1515,12 @@ const PRODUTOS = ['Verniz de Motor', 'Limpa Freio', 'Sanitizante']
           </div>
         </div>
 
-        <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 26, position: 'relative' }}>
+        <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 26, position: 'relative' }}>
           {abas.map(([key, label]) => (
             <button
               key={key}
               onClick={() => setAba(key)}
-              style={{
-                border: aba === key ? `1px solid ${PREM.gold}` : '1px solid rgba(56,189,248,0.18)',
-                cursor: 'pointer', borderRadius: 999, padding: '9px 16px', whiteSpace: 'nowrap',
-                fontSize: 13, fontWeight: aba === key ? 700 : 600,
-                background: aba === key ? PREM.gold : 'rgba(255,255,255,0.06)',
-                color: aba === key ? PREM.goldOn : '#B7C0D4',
-              }}
+              className={`av-tab${aba === key ? ' is-active' : ''}`}
             >
               {label}
             </button>
