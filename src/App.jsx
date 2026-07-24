@@ -8,7 +8,9 @@ import AdminBenchmark from './pages/AdminBenchmark'
 import AdminFluxo from './pages/AdminFluxo'
 import AdminLojas from './pages/AdminLojas'
 import AdminFaturamento from './pages/AdminFaturamento'
-import FaturamentoClientes from './pages/FaturamentoClientes'
+// TODO: reativar import e uso abaixo assim que o arquivo FaturamentoClientes.jsx
+// for enviado ao repositório — hoje ele não existe em src/pages e quebra o build.
+// import FaturamentoClientes from './pages/FaturamentoClientes'
 import Dashboard from './pages/Dashboard'
 import Vendas from './pages/Vendas'
 import Vendedores from './pages/Vendedores'
@@ -162,10 +164,11 @@ export default function App() {
           <Comissoes
             comissoes={comissoes} vendedores={vendedores} vendas={vendas} fechamentos={fechamentos}
             onChanged={loadAll} notify={notify} clienteId={cliente.id}
-            {panel === 'faturamento' && <AdminFaturamento />}
-        {panel === 'faturamento-clientes' && <FaturamentoClientes />}
           />
         )}
+        {panel === 'faturamento' && <AdminFaturamento />}
+        {/* TODO: reativar quando FaturamentoClientes.jsx for enviado ao repositório */}
+        {/* {panel === 'faturamento-clientes' && <FaturamentoClientes />} */}
         {panel === 'ranking' && <Ranking vendas={vendas} vendedores={vendedores} />}
         {panel === 'relatorios' && <Relatorios vendas={vendas} vendedores={vendedores} servicos={servicos} notify={notify} clienteNome={cliente.nome} />}
       </main>
